@@ -161,9 +161,29 @@ export function isHttpsRequest(req: Request) {
   return Boolean(req.secure || req.headers["x-forwarded-proto"] === "https");
 }
 
+export function requestOrigin(req: Request) {
+  const host = String(
+    req.get("x-forwarded-host") || req.get("host") || "localhost:5173",
+  ).split(",")[0];
+  const proto = isHttpsRequest(req) ? "https" : "http";
+  return `${proto}://${host}`;
+}
+
+export function isJumpCloudSamlAcs(req: Request) {
+  if (req.method !== "POST") return false;
+  const path = String(req.originalUrl || req.url || "")
+    .split("?")[0]
+    .replace(/\/+$/, "");
+  return (
+    path === "/api/auth/jumpcloud/saml/acs" ||
+    path === "/auth/jumpcloud/saml/acs"
+  );
+}
+
 export function rejectForeignOrigins() {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!MUTATING.has(req.method)) return next();
+    if (isJumpCloudSamlAcs(req)) return next();
     const origin = req.headers.origin;
     if (!origin) return next();
     if (allowedOrigins().has(origin)) return next();
@@ -176,6 +196,7 @@ export const REQUESTED_WITH = "DaxGov";
 export function requireRequestedWith() {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!MUTATING.has(req.method)) return next();
+    if (isJumpCloudSamlAcs(req)) return next();
     if (String(req.headers["x-requested-with"] || "") !== REQUESTED_WITH)
       return res.status(403).json({ error: "Forbidden" });
     next();

@@ -21,6 +21,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@node-saml/node-saml": "^5.1.0",
     "@prisma/client": "^6.11.1",
     "@tanstack/react-table": "^8.21.3",
     "bcryptjs": "^3.0.3",

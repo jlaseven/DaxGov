@@ -1104,7 +1104,6 @@ export default function IsraAssessmentPage() {
                               placeholder={
                                 current.placeholder || "e.g. Named item"
                               }
-                              maxLength={150}
                               autoFocus={itemIndex === 0}
                             />
                             {listItems.length > 1 && (

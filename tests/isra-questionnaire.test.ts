@@ -126,6 +126,14 @@ describe("Daxon guided ISRA", () => {
       "Customer records",
       "Vendor contracts",
     ]);
+    expect(
+      validateDaxonAnswer(
+        dataQuestion,
+        serializeDaxonList([
+          `${"A".repeat(80)} customer records used by onboarding, collections, and finance with supporting notes`,
+        ]),
+      ),
+    ).toBeNull();
   });
 
   it("asks named-item questions as lists instead of long text", () => {

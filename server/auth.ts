@@ -245,7 +245,10 @@ export function requiredAccess(
     normalized === "/logout" ||
     normalized === "/auth/sso" ||
     normalized === "/auth/jumpcloud" ||
-    normalized === "/auth/jumpcloud/callback"
+    normalized === "/auth/jumpcloud/callback" ||
+    normalized === "/auth/jumpcloud/saml" ||
+    normalized === "/auth/jumpcloud/saml/acs" ||
+    normalized === "/auth/jumpcloud/saml/metadata"
   )
     return "public";
   if (normalized === "/me" || normalized === "/me/password") return "auth";

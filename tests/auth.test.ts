@@ -57,6 +57,11 @@ describe("auth helpers", () => {
     expect(requiredAccess("GET", "/auth/sso")).toBe("public");
     expect(requiredAccess("GET", "/auth/jumpcloud")).toBe("public");
     expect(requiredAccess("GET", "/auth/jumpcloud/callback")).toBe("public");
+    expect(requiredAccess("GET", "/auth/jumpcloud/saml")).toBe("public");
+    expect(requiredAccess("POST", "/auth/jumpcloud/saml/acs")).toBe("public");
+    expect(requiredAccess("GET", "/auth/jumpcloud/saml/metadata")).toBe(
+      "public",
+    );
     expect(requiredAccess("GET", "/health")).toBe("public");
     expect(requiredAccess("GET", "/me")).toBe("auth");
     expect(requiredAccess("GET", "/users")).toBe("admin");
@@ -219,11 +224,26 @@ describe("auth HTTP", () => {
     const sso = await request(app).get("/api/auth/sso");
     expect(sso.status).toBe(200);
     expect(sso.body).toEqual({
-      data: { jumpcloud: false, passwordLogin: true },
+      data: { jumpcloud: false, passwordLogin: true, protocol: null },
     });
     const start = await request(app).get("/api/auth/jumpcloud");
     expect(start.status).toBe(404);
     expect(start.body.error).toMatch(/not configured/i);
+    const saml = await request(app).get("/api/auth/jumpcloud/saml");
+    expect(saml.status).toBe(404);
+    const metadata = await request(app).get(
+      "/api/auth/jumpcloud/saml/metadata",
+    );
+    expect(metadata.status).toBe(404);
+  });
+
+  it("accepts JumpCloud SAML ACS posts without the DaxGov browser header", async () => {
+    const response = await request(app)
+      .post("/api/auth/jumpcloud/saml/acs")
+      .type("form")
+      .send({ SAMLResponse: "dGVzdA==" });
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toMatch(/sso_error=not_configured/);
   });
 
   it("returns the same generic login error and does not reveal usernames", async () => {

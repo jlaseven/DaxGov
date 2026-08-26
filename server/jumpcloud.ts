@@ -4,14 +4,19 @@ import type { Express, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
 import type { LogFn } from "./activityLog.js";
 import { createSession, destroySession, toAuthUser } from "./auth.js";
-import { isHttpsRequest } from "./security.js";
+import { isHttpsRequest, requestOrigin } from "./security.js";
 import {
   candidateUsernames,
   emailAllowedForSso,
-  jumpcloudEnabled,
   jumpcloudIssuer,
+  jumpcloudOidcEnabled,
+  jumpcloudPreferredProtocol,
   jumpcloudPublicConfig,
 } from "./ssoConfig.js";
+import {
+  registerJumpCloudSamlRoutes,
+  startJumpCloudSaml,
+} from "./jumpcloudSaml.js";
 
 export const JUMPCLOUD_STATE_COOKIE = "cybergov_oidc";
 export {
@@ -19,6 +24,8 @@ export {
   emailAllowedForSso,
   jumpcloudEnabled,
   jumpcloudIssuer,
+  jumpcloudOidcEnabled,
+  jumpcloudPreferredProtocol,
   jumpcloudPublicConfig,
   passwordLoginEnabled,
 } from "./ssoConfig.js";
@@ -119,11 +126,7 @@ function stateCookieOptions(req: Request, maxAge = STATE_TTL_MS) {
 export function jumpcloudRedirectUri(req: Request) {
   const configured = String(process.env.JUMPCLOUD_REDIRECT_URI || "").trim();
   if (configured) return configured;
-  const host = String(
-    req.get("x-forwarded-host") || req.get("host") || "localhost:5173",
-  ).split(",")[0];
-  const proto = isHttpsRequest(req) ? "https" : "http";
-  return `${proto}://${host}/api/auth/jumpcloud/callback`;
+  return `${requestOrigin(req)}/api/auth/jumpcloud/callback`;
 }
 
 async function discovery(): Promise<OidcDiscovery> {
@@ -237,7 +240,13 @@ export function registerJumpCloudRoutes(
 
   app.get("/api/auth/jumpcloud", startLimiter, async (req, res, next) => {
     try {
-      if (!jumpcloudEnabled())
+      const protocol = jumpcloudPreferredProtocol();
+      if (!protocol)
+        return res.status(404).json({
+          error: "JumpCloud single sign-on is not configured",
+        });
+      if (protocol === "saml") return startJumpCloudSaml(req, res);
+      if (!jumpcloudOidcEnabled())
         return res.status(404).json({
           error: "JumpCloud single sign-on is not configured",
         });
@@ -278,7 +287,7 @@ export function registerJumpCloudRoutes(
 
   app.get("/api/auth/jumpcloud/callback", async (req, res, next) => {
     try {
-      if (!jumpcloudEnabled())
+      if (!jumpcloudOidcEnabled())
         return res.redirect(ssoErrorRedirect("not_configured"));
       if (req.query.error)
         return res.redirect(
@@ -346,4 +355,6 @@ export function registerJumpCloudRoutes(
       res.redirect(ssoErrorRedirect("invalid"));
     }
   });
+
+  registerJumpCloudSamlRoutes(app, prisma, log, findUserForJumpCloudClaims);
 }

@@ -66,11 +66,39 @@ The running app still uses `DATABASE_URL=file:./governance.db`. Do not change th
 
 ## Later: JumpCloud SSO
 
-Local username/password stays on until you set both:
+Local username/password stays on until JumpCloud SSO is configured. Create the DaxGov user first. JumpCloud sign-in matches `preferred_username`, SAML `username`/`NameID`, or the email local-part to `User.username`. Unmatched accounts are not created automatically.
+
+The login page shows **Sign in with JumpCloud** when either OIDC or SAML is configured. `/api/auth/jumpcloud` picks the protocol automatically. If both are set, OIDC is used unless `JUMPCLOUD_SSO_PROTOCOL=saml`.
+
+### OpenID Connect
+
+Set both:
 
 - `JUMPCLOUD_CLIENT_ID`
 - `JUMPCLOUD_CLIENT_SECRET`
 
-Optional: `JUMPCLOUD_ISSUER` (default `https://oauth.id.jumpcloud.com/`), `JUMPCLOUD_REDIRECT_URI`, `JUMPCLOUD_EMAIL_DOMAINS` (comma-separated, e.g. `pdax.ph`), `JUMPCLOUD_DISABLE_PASSWORD=true` after SSO works.
+Optional: `JUMPCLOUD_ISSUER` (default `https://oauth.id.jumpcloud.com/`), `JUMPCLOUD_REDIRECT_URI` (default `{origin}/api/auth/jumpcloud/callback`).
 
-Create the DaxGov user first. JumpCloud sign-in matches `preferred_username` or the email local-part to `User.username`. Unmatched accounts are not created automatically.
+In JumpCloud, create an **OIDC** SSO application. Redirect URL: `http://localhost:5173/api/auth/jumpcloud/callback` (or your HTTPS origin).
+
+### SAML 2.0
+
+Set both:
+
+- `JUMPCLOUD_SAML_ENTRYPOINT` (JumpCloud SSO URL, e.g. `https://sso.jumpcloud.com/saml2/<app>`)
+- `JUMPCLOUD_SAML_IDP_CERT` (JumpCloud IdP certificate PEM or base64 body)
+
+Optional aliases: `JUMPCLOUD_SAML_SSO_URL`, `JUMPCLOUD_SAML_CERT`, `JUMPCLOUD_SAML_IDP_CERT_FILE` (path to a `.pem` file).
+
+In JumpCloud, create a **SAML** SSO application and paste these DaxGov values:
+
+- ACS URL: `{origin}/api/auth/jumpcloud/saml/acs`
+- SP Entity ID: `{origin}/api/auth/jumpcloud/saml/metadata`
+- Login URL: `{origin}/api/auth/jumpcloud` or `{origin}/api/auth/jumpcloud/saml`
+- SP metadata: `GET {origin}/api/auth/jumpcloud/saml/metadata`
+
+Local example origin: `http://localhost:5173`. On a published host, use `https://your-host`.
+
+Optional SAML settings: `JUMPCLOUD_SAML_ISSUER` / `JUMPCLOUD_SAML_SP_ENTITY_ID` (must match JumpCloud’s SP Entity ID), `JUMPCLOUD_SAML_CALLBACK_URL` (must match ACS), `JUMPCLOUD_SAML_IDP_ENTITY_ID`, `JUMPCLOUD_SSO_PROTOCOL=saml`.
+
+Shared optional: `JUMPCLOUD_EMAIL_DOMAINS` (comma-separated, e.g. `pdax.ph`), `JUMPCLOUD_DISABLE_PASSWORD=true` after SSO works.

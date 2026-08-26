@@ -604,8 +604,6 @@ export function validateDaxonAnswer(
     }
     if (items.length > 50) return "List no more than 50 items.";
     for (const item of items) {
-      if (item.length > 150)
-        return "Keep each item to 150 characters or fewer. Use a short name, not a sentence.";
       if (/[;\n•]/.test(item))
         return "Put each item on its own row instead of combining names.";
     }
