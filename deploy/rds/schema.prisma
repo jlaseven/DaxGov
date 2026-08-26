@@ -1,0 +1,611 @@
+// Generated from prisma/schema.prisma for Amazon RDS (PostgreSQL).
+// Do not apply this until you are ready to migrate. The live app still uses SQLite.
+// Extra User fields below are for JumpCloud later; they are not in the current SQLite database.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model GovernanceDocument {
+  id                       Int       @id @default(autoincrement())
+  documentName             String    @unique
+  status                   String
+  cybersecurityPillar      String
+  commentsRemarks          String?
+  applicableStandards      String?
+  applicableBspRegulations String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  archivedAt               DateTime?
+
+  @@index([status])
+  @@index([cybersecurityPillar])
+}
+
+model OpirAction {
+  id                 Int       @id @default(autoincrement())
+  opirNumber         String    @unique
+  squad              String?
+  riskRating         String
+  incidentTitle      String
+  actionOwner        String?
+  solution           String?
+  originalTargetDate DateTime?
+  updatedTargetDate  DateTime?
+  remarks            String?
+  jiraTicket         String?
+  actionStatus       String    @default("Todo")
+  lastUpdateDate     DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  archivedAt         DateTime?
+
+  @@index([riskRating])
+  @@index([actionOwner])
+  @@index([actionStatus])
+  @@index([originalTargetDate])
+  @@index([updatedTargetDate])
+}
+
+model AuditFinding {
+  id                    Int       @id @default(autoincrement())
+  findingNumber         String    @unique
+  year                  Int?
+  observationId         String?
+  division              String?
+  departmentProcess     String?
+  auditObservation      String
+  observationDetails    String?
+  riskLevel             String
+  rootCause             String?
+  risks                 String?
+  impact                String?
+  recommendation        String?
+  managementResponse    String?
+  commitmentActionPlan  String?
+  responsibleDepartment String?
+  responsiblePersonnel  String?
+  reportDate            DateTime?
+  exitMeetingDate       DateTime?
+  originalTargetDate    DateTime?
+  updatedTargetDate     DateTime?
+  managementStatus      String?
+  findingStatus         String    @default("Open")
+  remarks               String?
+  evidenceReferences    String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  archivedAt            DateTime?
+
+  @@index([riskLevel])
+  @@index([findingStatus])
+  @@index([responsiblePersonnel])
+  @@index([originalTargetDate])
+  @@index([updatedTargetDate])
+}
+
+model Objective {
+  id                     Int       @id @default(autoincrement())
+  objectiveId            String    @unique
+  objectiveName          String
+  objectiveStatus        String    @default("Todo")
+  assignees              String?
+  contributors           String?
+  startDate              DateTime?
+  endDate                DateTime?
+  manualProgressOverride Float?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  archivedAt             DateTime?
+  tasks                  OkrTask[]
+
+  @@index([objectiveStatus])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model OkrTask {
+  id           Int       @id @default(autoincrement())
+  objectiveId  Int
+  objective    Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  taskName     String
+  taskStatus   String    @default("Todo")
+  assignees    String?
+  contributors String?
+  startDate    DateTime?
+  endDate      DateTime?
+  remarks      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  archivedAt   DateTime?
+
+  @@index([taskStatus])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model Initiative {
+  id             Int             @id @default(autoincrement())
+  category       String
+  initiativeName String
+  description    String?
+  owner          String?
+  startDate      DateTime?
+  endDate        DateTime?
+  status         String          @default("Todo")
+  manualOverride Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  archivedAt     DateTime?
+  subInitiatives SubInitiative[]
+
+  @@index([category])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model SubInitiative {
+  id                Int        @id @default(autoincrement())
+  initiativeId      Int
+  initiative        Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  subInitiativeName String
+  owner             String?
+  startDate         DateTime?
+  endDate           DateTime?
+  status            String     @default("Todo")
+  remarks           String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  archivedAt        DateTime?
+
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model ActivityLog {
+  id            Int      @id @default(autoincrement())
+  entityType    String
+  entityId      String
+  action        String
+  fieldChanged  String?
+  previousValue String?
+  newValue      String?
+  createdAt     DateTime @default(now())
+  eventType     String   @default("activity")
+  outcome       String   @default("success")
+  severity      String   @default("info")
+  actorId       String?
+  actorUsername String?
+  actorRole     String?
+  srcIp         String?
+  targetName    String?
+  httpMethod    String?
+  httpPath      String?
+  httpStatus    Int?
+
+  @@index([entityType])
+  @@index([createdAt])
+  @@index([action])
+  @@index([outcome])
+}
+
+model ApplicationSetting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model IsraAssessment {
+  id                     Int                  @id @default(autoincrement())
+  department             String
+  departmentKey          String
+  sourceFile             String
+  sourceSheet            String
+  sourceType             String               @default("Workbook")
+  respondentName         String?
+  questionnaireResponses String?
+  isActive               Boolean              @default(true)
+  riskCount              Int
+  qualityFindingCount    Int
+  importedAt             DateTime             @default(now())
+  risks                  IsraRisk[]
+  qualityFindings        IsraQualityFinding[]
+  informationAssets      InformationAsset[]
+
+  @@index([departmentKey, isActive])
+  @@index([importedAt])
+}
+
+model InformationAsset {
+  id                Int             @id @default(autoincrement())
+  department        String
+  departmentKey     String
+  sourceAssetKey    String
+  sourceQuestion    String
+  daxonAssessmentId Int?
+  daxonAssessment   IsraAssessment? @relation(fields: [daxonAssessmentId], references: [id], onDelete: SetNull)
+  assetName         String
+  assetType         String?
+  businessImpact    String?
+  threat            String?
+  vulnerability     String?
+  likelihood        String?
+  impact            String?
+  riskLevel         String?
+  existingControls  String?
+  researchSources   String?
+  researchUpdatedAt DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([departmentKey, sourceAssetKey])
+  @@index([departmentKey])
+  @@index([daxonAssessmentId])
+  @@index([researchUpdatedAt])
+}
+
+model IsraRisk {
+  id                          Int            @id @default(autoincrement())
+  assessmentId                Int
+  assessment                  IsraAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  rowNumber                   Int
+  riskReference               String?
+  process                     String?
+  description                 String?
+  inherentLikelihood          Int?
+  inherentImpact              Int?
+  inherentScore               Float?
+  importedInherentScore       Float?
+  existingControls            String?
+  controlEffectiveness        Float?
+  controlEffectivenessRemarks String?
+  residualLikelihood          Int?
+  residualImpact              Int?
+  residualScore               Float?
+  riskTreatment               String?
+  actionPlan                  String?
+  actionOwner                 String?
+  commitmentDate              DateTime?
+  rawCommitmentDate           String?
+  evidenceLink                String?
+  inherentRating              String
+  residualRating              String
+  manualReview                Boolean        @default(false)
+
+  @@index([assessmentId])
+  @@index([riskReference])
+  @@index([inherentRating])
+  @@index([residualRating])
+  @@index([commitmentDate])
+}
+
+model IsraQualityFinding {
+  id            Int            @id @default(autoincrement())
+  assessmentId  Int
+  assessment    IsraAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  severity      String
+  rowNumber     Int
+  riskReference String?
+  category      String
+  message       String
+
+  @@index([assessmentId])
+  @@index([severity])
+  @@index([category])
+}
+
+model TpsaRecord {
+  id                           Int                 @id @default(autoincrement())
+  tpsaReference                String              @unique
+  vendorName                   String
+  vendorLegalEntity            String?
+  productService               String
+  businessProcessOwner         String?
+  department                   String?
+  reviewerName                 String
+  vendorType                   String              @default("New Vendor")
+  vendorTier                   String              @default("Not Yet Assigned")
+  tierJustification            String?
+  tierAssignedBy               String?
+  tierAssignmentDate           DateTime?
+  assessmentType               String              @default("Not Yet Determined")
+  assessmentReason             String?
+  assessmentScope              String?
+  businessCriticality          String?
+  status                       String              @default("Draft")
+  verdict                      String              @default("Pending")
+  verdictDate                  DateTime?
+  verdictIssuedBy              String?
+  verdictJustification         String?
+  conditionsRestrictions       String?
+  requiredEvidenceReceived     Boolean             @default(false)
+  cybersecurityReviewCompleted Boolean             @default(false)
+  sentDate                     DateTime?
+  submissionDeadline           DateTime?
+  submittedDate                DateTime?
+  reviewStartDate              DateTime?
+  reviewDeadline               DateTime?
+  reviewCompletedDate          DateTime?
+  remediationDeadline          DateTime?
+  lastFollowUpDate             DateTime?
+  nextFollowUpDate             DateTime?
+  nextReassessmentDate         DateTime?
+  openCriticalFindings         Int                 @default(0)
+  openHighFindings             Int                 @default(0)
+  openMediumFindings           Int                 @default(0)
+  openLowFindings              Int                 @default(0)
+  findingsSummary              String?
+  compensatingControls         String?
+  highFindingsTreatmentStatus  String              @default("Not Applicable")
+  remediationNotes             String?
+  rafStatus                    String              @default("Not Required")
+  rafLink                      String?
+  rafApprovalDate              DateTime?
+  rafExpirationDate            DateTime?
+  rafApprovingAuthority        String?
+  rafConditions                String?
+  rafNotes                     String?
+  questionnaireLink            String?
+  evidenceFolderLink           String?
+  assessmentReportLink         String?
+  otherDocumentLink            String?
+  remarks                      String?
+  reassessmentTrigger          String?
+  previousAssessmentId         Int?
+  previousAssessment           TpsaRecord?         @relation("TpsaReassessments", fields: [previousAssessmentId], references: [id])
+  reassessments                TpsaRecord[]        @relation("TpsaReassessments")
+  archivedAt                   DateTime?
+  archiveReason                String?
+  statusBeforeArchive          String?
+  createdAt                    DateTime            @default(now())
+  createdBy                    String              @default("Local User")
+  updatedAt                    DateTime            @updatedAt
+  updatedBy                    String              @default("Local User")
+  certifications               TpsaCertification[]
+  followUps                    TpsaFollowUp[]
+
+  @@index([status])
+  @@index([verdict])
+  @@index([vendorName])
+  @@index([vendorTier])
+  @@index([reviewerName])
+  @@index([submissionDeadline])
+  @@index([reviewDeadline])
+  @@index([nextFollowUpDate])
+  @@index([nextReassessmentDate])
+}
+
+model TpsaCertification {
+  id                    Int        @id @default(autoincrement())
+  tpsaRecordId          Int
+  tpsaRecord            TpsaRecord @relation(fields: [tpsaRecordId], references: [id], onDelete: Cascade)
+  certificationType     String
+  documentName          String
+  url                   String
+  issuingOrganization   String?
+  issueDate             DateTime?
+  expirationDate        DateTime?
+  legalEntityCovered    String?
+  productServiceCovered String?
+  scopeNotes            String?
+  reviewStatus          String     @default("Pending Review")
+  reviewDate            DateTime?
+  reviewedBy            String?
+  reviewNotes           String?
+  createdAt             DateTime   @default(now())
+  createdBy             String     @default("Local User")
+  updatedAt             DateTime   @updatedAt
+  updatedBy             String     @default("Local User")
+
+  @@index([tpsaRecordId])
+  @@index([expirationDate])
+  @@index([reviewStatus])
+}
+
+model TpsaFollowUp {
+  id                     Int        @id @default(autoincrement())
+  tpsaRecordId           Int
+  tpsaRecord             TpsaRecord @relation(fields: [tpsaRecordId], references: [id], onDelete: Cascade)
+  followUpDate           DateTime
+  method                 String
+  personContacted        String?
+  organizationDepartment String?
+  notes                  String?
+  responseReceived       Boolean    @default(false)
+  responseSummary        String?
+  nextFollowUpDate       DateTime?
+  recordedBy             String     @default("Local User")
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  @@index([tpsaRecordId])
+  @@index([followUpDate])
+  @@index([nextFollowUpDate])
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  displayName  String
+  passwordHash String
+  email        String?
+  jumpcloudSub String?  @unique
+  authProvider String   @default("local")
+  role         String
+  status       String
+  allowedPages String
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+  watchItems   WatchItem[]
+  notificationReads NotificationRead[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model WatchItem {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityType String
+  entityId   String
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, entityType, entityId])
+  @@index([userId])
+}
+
+model NotificationRead {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noticeKey String
+  readAt    DateTime @default(now())
+
+  @@unique([userId, noticeKey])
+  @@index([userId])
+}
+
+model Department {
+  id            Int      @id @default(autoincrement())
+  name          String
+  departmentKey String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+}
+
+model OrcaRisk {
+  id                                 Int       @id @default(autoincrement())
+  sortOrder                          Int       @default(0)
+  processNo                          String
+  process                            String
+  riskNo                             String    @unique
+  riskCategory                       String?
+  riskThreat                         String
+  cause                              String?
+  inherentLikelihood                 String?
+  riskStrategy                       String?
+  existingKeyControls                String?
+  controlEffectivity                 String?
+  overallControlEffectivenessRemarks String?
+  impactCategory                     String?
+  impactPerRisk                      String?
+  inherentImpactRating               String?
+  inherentRiskScore                  Int?
+  inherentRiskRatingRemarks          String?
+  residualLikelihoodRating           String?
+  residualImpactRating               String?
+  residualRiskScore                  Int?
+  residualRiskRemarks                String?
+  riskManagementRemarks              String?
+  actionItemRequired                 String?
+  riskAcceptanceRequired             String?
+  riskAcceptanceFormLink             String?
+  actionItems                        String?
+  targetCompletionDate               DateTime?
+  status                             String?
+  residualLikelihood                 Int?
+  residualImpact                     Int?
+  createdAt                          DateTime  @default(now())
+  updatedAt                          DateTime  @updatedAt
+  archivedAt                         DateTime?
+  kriMappings                        KriOrcaMap[]
+
+  @@index([processNo])
+  @@index([status])
+  @@index([controlEffectivity])
+  @@index([sortOrder])
+}
+
+model KriSheet {
+  id         Int         @id @default(autoincrement())
+  year       Int         @unique
+  status     String      @default("Active")
+  archivedAt DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  records    KriRecord[]
+
+  @@index([status])
+}
+
+model KriRecord {
+  id                 Int          @id @default(autoincrement())
+  sheetId            Int
+  sheet              KriSheet     @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  sortOrder          Int          @default(0)
+  riskCode           String?
+  riskName           String
+  kriNumber          String
+  keyRiskIndicator   String
+  weight             Float?
+  breached           String?
+  warning            String?
+  good               String?
+  janResult          String?
+  janRemarks         String?
+  febResult          String?
+  febRemarks         String?
+  marResult          String?
+  marRemarks         String?
+  aprResult          String?
+  aprRemarks         String?
+  mayResult          String?
+  mayRemarks         String?
+  junResult          String?
+  junRemarks         String?
+  julResult          String?
+  julRemarks         String?
+  augResult          String?
+  augRemarks         String?
+  sepResult          String?
+  sepRemarks         String?
+  octResult          String?
+  octRemarks         String?
+  novResult          String?
+  novRemarks         String?
+  decResult          String?
+  decRemarks         String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  archivedAt         DateTime?
+  mappings           KriOrcaMap[]
+
+  @@index([sheetId])
+  @@index([riskCode])
+  @@index([sortOrder])
+}
+
+model KriOrcaMap {
+  id          Int       @id @default(autoincrement())
+  kriRecordId Int
+  kriRecord   KriRecord @relation(fields: [kriRecordId], references: [id], onDelete: Cascade)
+  orcaRiskId  Int
+  orcaRisk    OrcaRisk  @relation(fields: [orcaRiskId], references: [id], onDelete: Cascade)
+
+  @@unique([kriRecordId, orcaRiskId])
+  @@index([orcaRiskId])
+}

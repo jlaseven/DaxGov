@@ -1,0 +1,2 @@
+import js from '@eslint/js';import tseslint from 'typescript-eslint';import globals from 'globals';
+export default [{ignores:['dist/**','dist-server/**','node_modules/**','prisma/migrations/**']},js.configs.recommended,...tseslint.configs.recommended,{files:['**/*.{ts,tsx}'],languageOptions:{globals:{...globals.browser,...globals.node}},rules:{'@typescript-eslint/no-explicit-any':'off','@typescript-eslint/no-unused-vars':['warn',{argsIgnorePattern:'^_'}],'no-undef':'off'}}];

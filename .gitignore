@@ -1,0 +1,23 @@
+# Secrets and local config
+credentials/
+.env
+.env.*
+!.env.example
+deploy/rds/export.json
+
+# Dependencies and build output
+node_modules/
+dist/
+dist-server/
+
+# SQLite sidecar files (keep *.db, including prisma/governance.db)
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Packaged Windows binary
+for windows/*.exe
+
+# OS junk
+.DS_Store
+**/.DS_Store
