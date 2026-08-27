@@ -75,6 +75,8 @@ const ENTITY_ALIASES: Record<string, string> = {
   "kri-records": "kri-record",
   "kri-sheets": "kri-sheet",
   "kri-mappings": "kri-mapping",
+  "orca-monitoring": "orca-monitoring",
+  "orca-risk-reviews": "orca-risk-review",
   WorkbookMigration: "workbook-migration",
 };
 const VERB_ALIASES: Record<string, string> = {

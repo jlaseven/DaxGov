@@ -82,6 +82,8 @@ describe("auth helpers", () => {
     expect(requiredAccess("GET", "/kri-records")).toBe("kris");
     expect(requiredAccess("POST", "/kri-sheets/rollover")).toBe("kris");
     expect(requiredAccess("GET", "/kri-mappings")).toBe("auth");
+    expect(requiredAccess("GET", "/risk-monitoring/coverage")).toBe("auth");
+    expect(requiredAccess("GET", "/orca-risk-reviews")).toBe("auth");
     expect(requiredAccess("GET", "/regulatory-guide")).toBe("regulatory-guide");
     expect(requiredAccess("GET", "/documents")).toBe("documents");
     expect(requiredAccess("GET", "/okr-tasks")).toBe("objectives");

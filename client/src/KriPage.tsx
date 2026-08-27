@@ -3,6 +3,12 @@ import { api, csv } from "./api";
 import { ImportanceToggle } from "./notifications";
 import { OrcaKriMappingModal } from "./OrcaKriMapping";
 import { badgeClass } from "./theme";
+import {
+  CoverageWorkspace,
+  MonitoringDashboard,
+  SubmissionWorkspace,
+  useRiskMonitoring,
+} from "./KriMonitoringWorkspaces";
 
 const MONTHS = [
   ["jan", "January"],
@@ -69,6 +75,10 @@ export default function KriPage() {
   const [toast, setToast] = useState("");
   const [selected, setSelected] = useState<number[]>([]);
   const [expanded, setExpanded] = useState<number[]>([]);
+  const [workspace, setWorkspace] = useState<
+    "register" | "dashboard" | "coverage" | "submit"
+  >("dashboard");
+  const monitoring = useRiskMonitoring();
   const [visible, setVisible] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("columns-kris") || "null") || DEFAULT_VISIBLE;
@@ -233,6 +243,13 @@ export default function KriPage() {
           </p>
         </div>
         <div className="actions">
+          <button
+            type="button"
+            className={workspace === "register" ? "primary" : ""}
+            onClick={() => setWorkspace("register")}
+          >
+            Year sheet
+          </button>
           <button type="button" onClick={() => setMapping({ side: "kri" })}>
             Mapping
           </button>
@@ -260,6 +277,70 @@ export default function KriPage() {
           {error}
         </div>
       )}
+      {monitoring.error && workspace !== "register" && (
+        <div className="form-error" role="alert">
+          {monitoring.error}
+        </div>
+      )}
+      <div className="kri-hub" role="tablist" aria-label="KRI monitoring workspaces">
+        <button
+          type="button"
+          className={workspace === "dashboard" ? "kri-hub-btn active" : "kri-hub-btn"}
+          onClick={() => setWorkspace("dashboard")}
+        >
+          <span className="kri-hub-kicker">Workspace 1</span>
+          <span className="kri-hub-title">Management Risk Monitoring Status</span>
+          <span className="kri-hub-desc">
+            Coverage, breaches, overdue submissions, and charts for ManCom.
+          </span>
+        </button>
+        <button
+          type="button"
+          className={workspace === "coverage" ? "kri-hub-btn active" : "kri-hub-btn"}
+          onClick={() => setWorkspace("coverage")}
+        >
+          <span className="kri-hub-kicker">Workspace 2</span>
+          <span className="kri-hub-title">ORCA — with monitoring columns</span>
+          <span className="kri-hub-desc">
+            Coverage view of ORCA risks. The ORCA page itself stays unchanged.
+          </span>
+        </button>
+        <button
+          type="button"
+          className={workspace === "submit" ? "kri-hub-btn active" : "kri-hub-btn"}
+          onClick={() => setWorkspace("submit")}
+        >
+          <span className="kri-hub-kicker">Workspace 3</span>
+          <span className="kri-hub-title">KRI submission — enter actual result</span>
+          <span className="kri-hub-desc">
+            Type the number. DaxGov calculates Good / Warning / Breached.
+          </span>
+        </button>
+      </div>
+      {workspace === "dashboard" && (
+        <MonitoringDashboard
+          data={monitoring.dashboard}
+          onOpenCoverage={() => setWorkspace("coverage")}
+        />
+      )}
+      {workspace === "coverage" && (
+        <CoverageWorkspace
+          rows={monitoring.coverage}
+          summary={monitoring.summary}
+          year={year}
+          onReload={monitoring.load}
+        />
+      )}
+      {workspace === "submit" && (
+        <SubmissionWorkspace
+          rows={monitoring.coverage}
+          kris={rows}
+          year={year}
+          onReload={monitoring.load}
+        />
+      )}
+      {workspace === "register" && (
+        <>
       <div className="toolbar">
         <label>
           <span>Year</span>
@@ -462,6 +543,8 @@ export default function KriPage() {
             </div>
           </form>
         </div>
+      )}
+        </>
       )}
       {mapping && (
         <OrcaKriMappingModal

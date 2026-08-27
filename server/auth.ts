@@ -274,6 +274,11 @@ export function requiredAccess(
   )
     return "tpsa-monitoring";
   if (normalized.startsWith("/isra-spog")) return "isra";
+  if (
+    normalized.startsWith("/risk-monitoring") ||
+    normalized.startsWith("/orca-risk-reviews")
+  )
+    return "auth";
   if (normalized.startsWith("/orca")) return "orca";
   if (
     normalized.startsWith("/kri-sheets") ||

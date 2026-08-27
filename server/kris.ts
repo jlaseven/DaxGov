@@ -55,6 +55,11 @@ export const kriRecordSchema = z
     breached: opt,
     warning: opt,
     good: opt,
+    unit: opt,
+    direction: z.enum(["HIGHER_IS_BETTER", "LOWER_IS_BETTER"]).nullish(),
+    frequency: z.enum(["MONTHLY", "QUARTERLY", "EVENT_DRIVEN"]).nullish(),
+    dataSource: opt,
+    owner: opt,
     ...monthFields,
   })
   .strip();
@@ -155,7 +160,10 @@ export async function rolloverKriSheet(
   const source = await prisma.kriSheet.findUnique({
     where: { year: fromYear },
     include: {
-      records: { include: { mappings: true }, orderBy: { sortOrder: "asc" } },
+      records: {
+        include: { mappings: true, threshold: true },
+        orderBy: { sortOrder: "asc" },
+      },
     },
   });
   if (!source) throw new Error(`No KRI sheet exists for ${fromYear}.`);
@@ -186,8 +194,27 @@ export async function rolloverKriSheet(
           breached: record.breached,
           warning: record.warning,
           good: record.good,
+          unit: record.unit,
+          direction: record.direction,
+          frequency: record.frequency,
+          dataSource: record.dataSource,
+          owner: record.owner,
         },
       });
+      if (record.threshold) {
+        await tx.kriThreshold.create({
+          data: {
+            kriRecordId: created.id,
+            mode: record.threshold.mode,
+            goodMin: record.threshold.goodMin,
+            goodMax: record.threshold.goodMax,
+            warningMin: record.threshold.warningMin,
+            warningMax: record.threshold.warningMax,
+            breachMin: record.threshold.breachMin,
+            breachMax: record.threshold.breachMax,
+          },
+        });
+      }
       if (record.mappings.length) {
         await tx.kriOrcaMap.createMany({
           data: record.mappings.map((item) => ({
@@ -210,6 +237,8 @@ function serializeRecord(record: any) {
     orcaRisks: (record.mappings || [])
       .map((item: any) => item.orcaRisk)
       .filter(Boolean),
+    threshold: record.threshold || null,
+    thresholdMode: record.threshold?.mode || "MANUAL",
   };
 }
 
@@ -269,6 +298,7 @@ export function registerKriRoutes(
           include: {
             sheet: true,
             mappings: { include: { orcaRisk: true } },
+            threshold: true,
           },
           orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
           skip: (page - 1) * pageSize,
@@ -308,7 +338,7 @@ export function registerKriRoutes(
       const { year: _year, ...fields } = data;
       const row = await prisma.kriRecord.create({
         data: { ...fields, sheetId },
-        include: { sheet: true, mappings: { include: { orcaRisk: true } } },
+        include: { sheet: true, mappings: { include: { orcaRisk: true } }, threshold: true },
       });
       await log("kri-records", row.id, "Created", null, data);
       res.status(201).json({ data: serializeRecord(row) });
@@ -327,7 +357,7 @@ export function registerKriRoutes(
       const row = await prisma.kriRecord.update({
         where: { id },
         data: fields,
-        include: { sheet: true, mappings: { include: { orcaRisk: true } } },
+        include: { sheet: true, mappings: { include: { orcaRisk: true } }, threshold: true },
       });
       await log("kri-records", id, "Edited", prev, fields);
       res.json({ data: serializeRecord(row) });
@@ -394,6 +424,7 @@ export function registerKriRoutes(
           include: {
             sheet: true,
             mappings: { include: { orcaRisk: true } },
+            threshold: true,
           },
           orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
         }),

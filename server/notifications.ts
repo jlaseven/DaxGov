@@ -215,6 +215,13 @@ export type NotificationSource = {
     octResult?: string | null;
     novResult?: string | null;
     decResult?: string | null;
+    overdue?: boolean;
+  }[];
+  openReviews?: {
+    id: number;
+    orcaRiskId: number;
+    riskNo: string;
+    detail?: string | null;
   }[];
 };
 
@@ -580,6 +587,28 @@ export function buildNotifications(
         flags: ["attention"],
         dueDate: null,
       });
+    if (item.overdue)
+      upsert(map, {
+        entityType: "kri-records",
+        entityId: String(item.id),
+        title,
+        detail: "KRI submission overdue",
+        href: HREF_BY_TYPE["kri-records"],
+        flags: ["overdue"],
+        dueDate: null,
+      });
+  }
+
+  for (const review of source.openReviews || []) {
+    upsert(map, {
+      entityType: "orca",
+      entityId: String(review.orcaRiskId),
+      title: review.riskNo,
+      detail: review.detail || "ORCA risk review required after KRI breach",
+      href: HREF_BY_TYPE["kri-records"],
+      flags: ["attention"],
+      dueDate: null,
+    });
   }
 
   return [...map.values()].sort((a, b) => {
@@ -617,6 +646,7 @@ async function loadSource(prisma: PrismaClient, userId: number) {
     assets,
     orca,
     kris,
+    openReviews,
   ] = await Promise.all([
     prisma.watchItem.findMany({
       where: { userId },
@@ -642,6 +672,13 @@ async function loadSource(prisma: PrismaClient, userId: number) {
     prisma.kriRecord.findMany({
       where: { archivedAt: null, sheet: { status: "Active" } },
     }),
+    prisma.orcaRiskReview.findMany({
+      where: { status: "OPEN" },
+      include: {
+        orcaRisk: { select: { riskNo: true } },
+        kriRecord: { select: { kriNumber: true, keyRiskIndicator: true } },
+      },
+    }),
   ]);
   return {
     watched,
@@ -655,6 +692,12 @@ async function loadSource(prisma: PrismaClient, userId: number) {
     assets,
     orca,
     kris,
+    openReviews: openReviews.map((review) => ({
+      id: review.id,
+      orcaRiskId: review.orcaRiskId,
+      riskNo: review.orcaRisk.riskNo,
+      detail: review.triggerDetails,
+    })),
   };
 }
 

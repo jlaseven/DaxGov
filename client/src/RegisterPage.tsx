@@ -213,11 +213,13 @@ export default function RegisterPage({
   config: c,
   extraActions,
   onMapRow,
+  preamble,
 }: {
   type: string;
   config: any;
   extraActions?: ReactNode;
   onMapRow?: (row: any) => void;
+  preamble?: ReactNode;
 }) {
   const tableColumns = [
     ...(c.extraColumns || []),
@@ -547,6 +549,7 @@ export default function RegisterPage({
         </div>
       }
     >
+      {preamble}
       <div className="toolbar">
         <input
           placeholder="Search records…"

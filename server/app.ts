@@ -82,6 +82,7 @@ import {
 } from "./security.js";
 import { computeOrcaScores, orcaSchema } from "./orca.js";
 import { registerKriRoutes } from "./kris.js";
+import { registerRiskMonitoringRoutes } from "./riskMonitoringRoutes.js";
 import { registerJumpCloudRoutes } from "./jumpcloud.js";
 
 export const prisma = new PrismaClient();
@@ -290,6 +291,7 @@ registerUserRoutes(app, prisma, log);
 registerNotificationRoutes(app, prisma);
 registerDepartmentRoutes(app, prisma, log);
 registerKriRoutes(app, prisma, log);
+registerRiskMonitoringRoutes(app, prisma, log);
 for (const [route, schema] of Object.entries(schemas)) {
   const model = models[route];
   app.get("/api/" + route, async (req, res, next) => {
