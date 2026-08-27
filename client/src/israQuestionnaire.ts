@@ -272,10 +272,32 @@ export function isNoneListAnswer(value: string) {
   return noneListAnswerPattern.test(value.trim());
 }
 
+function splitCommaSeparatedNames(line: string) {
+  const stripped = line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "");
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  for (const char of stripped) {
+    if (char === "(") depth += 1;
+    else if (char === ")" && depth > 0) depth -= 1;
+    if (depth === 0 && char === ",") {
+      const piece = current.trim();
+      if (piece) parts.push(piece);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  const piece = current.trim();
+  if (piece) parts.push(piece);
+  return parts.length ? parts : [stripped];
+}
+
 export function parseDaxonList(value: string) {
   const items = String(value || "")
     .replaceAll("\r", "")
     .split(/\n+/)
+    .flatMap(splitCommaSeparatedNames)
     .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
     .filter(Boolean);
   return items.length ? items : [""];

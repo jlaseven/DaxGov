@@ -53,7 +53,9 @@ import {
 } from "./isra.js";
 import {
   informationAssetUpdateSchema,
+  loadInternalAssetResearchContext,
   parseDaxonResponses,
+  presentInformationAsset,
   researchInformationAsset,
   syncInformationAssetsFromDaxon,
 } from "./informationAssets.js";
@@ -1706,7 +1708,7 @@ app.get("/api/information-assets", async (req, res, next) => {
       data: {
         scope: selectedDepartment || "all",
         departments,
-        assets,
+        assets: assets.map((asset) => presentInformationAsset(asset)),
       },
       meta: { researchEnabled: assetResearchEnabled() },
     });
@@ -1726,7 +1728,7 @@ app.put("/api/information-assets/:id", async (req, res, next) => {
       return res.status(404).json({ error: "Information asset not found" });
     const asset = await prisma.informationAsset.update({
       where: { id },
-      data,
+      data: presentInformationAsset(data),
     });
     await log(
       "information-assets",
@@ -1735,7 +1737,7 @@ app.put("/api/information-assets/:id", async (req, res, next) => {
       previous,
       asset,
     );
-    res.json({ data: asset });
+    res.json({ data: presentInformationAsset(asset) });
   } catch (error) {
     next(error);
   }
@@ -1775,10 +1777,11 @@ app.post("/api/information-assets/:id/research", async (req, res, next) => {
     if (!asset)
       return res.status(404).json({ error: "Information asset not found" });
     const models = parseResearchModels(req.body?.models);
+    const internal = await loadInternalAssetResearchContext(prisma, asset);
     const research = await researchInformationAsset(
       asset.assetName,
       asset.assetType,
-      { models },
+      { models, ...internal },
     );
     const updated = await prisma.informationAsset.update({
       where: { id },
@@ -1789,7 +1792,7 @@ app.post("/api/information-assets/:id/research", async (req, res, next) => {
       models,
       researchUpdatedAt: updated.researchUpdatedAt,
     });
-    res.json({ data: updated });
+    res.json({ data: presentInformationAsset(updated) });
   } catch (error) {
     if (error instanceof Error)
       return res.status(502).json({

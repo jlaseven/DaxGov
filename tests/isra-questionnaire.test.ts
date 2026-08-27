@@ -127,6 +127,22 @@ describe("Daxon guided ISRA", () => {
       "Vendor contracts",
     ]);
     expect(
+      parseDaxonList(
+        "Jumpcloud, Google Workspace, Slack, Qualys, TrendMicro, Kissflow, NordPass",
+      ),
+    ).toEqual([
+      "Jumpcloud",
+      "Google Workspace",
+      "Slack",
+      "Qualys",
+      "TrendMicro",
+      "Kissflow",
+      "NordPass",
+    ]);
+    expect(
+      parseDaxonList("Device Information (Qualys, Mobile Device Information)"),
+    ).toEqual(["Device Information (Qualys, Mobile Device Information)"]);
+    expect(
       validateDaxonAnswer(
         dataQuestion,
         serializeDaxonList([

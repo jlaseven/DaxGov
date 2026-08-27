@@ -48,9 +48,70 @@ function formatResearchDate(value: string | null) {
   }).format(new Date(value))}`;
 }
 
-function InventoryValue({ value }: { value?: string | null }) {
+function isIncompleteFinding(text: string) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (!value) return true;
+  if (/…/.test(value) || /\.{3}$/.test(value)) return true;
+  return /\b(?:and|or|the|of|to|for|with|a|an|by|in|on|at|from|into|including|could|would|may|might|that|which|who|its|their)$/i.test(
+    value.replace(/["')\]]+$/, ""),
+  );
+}
+
+function isInstructionalFinding(text: string) {
+  return /^(?:bullet|finding|item|point)\s*\d+\s*[:.)-]?\s*$/i.test(
+    String(text || "").trim(),
+  );
+}
+
+function InventoryValue({
+  value,
+  expanded = false,
+}: {
+  value?: string | null;
+  expanded?: boolean;
+}) {
   const text = String(value || "").trim();
-  return <span className="asset-readout">{text || "—"}</span>;
+  if (!text) return <span className="asset-readout">—</span>;
+  const lines = text
+    .split(/\n+/)
+    .flatMap((line) => line.split(/(?:^|\s)•\s+/))
+    .map((line) =>
+      line
+        .replace(/^\s*•\s*/, "")
+        .replace(/^(?:bullet|finding|item|point)\s*\d+\s*[:.)-]?\s*/i, "")
+        .trim(),
+    )
+    .filter(
+      (line) =>
+        line && !isIncompleteFinding(line) && !isInstructionalFinding(line),
+    );
+  if (!lines.length)
+    return (
+      <span className="asset-readout">
+        Incomplete findings were removed. Run research again for a complete
+        analysis.
+      </span>
+    );
+  if (lines.length <= 1) {
+    return (
+      <span
+        className={`asset-readout asset-readout-justified${
+          expanded ? " is-expanded" : ""
+        }`}
+      >
+        {lines[0] || text}
+      </span>
+    );
+  }
+  return (
+    <ul
+      className={`asset-readout-list${expanded ? " is-expanded" : ""}`}
+    >
+      {lines.map((line, index) => (
+        <li key={`${index}-${line.slice(0, 24)}`}>{line}</li>
+      ))}
+    </ul>
+  );
 }
 
 export default function InformationAssetInventoryPage() {
@@ -63,6 +124,8 @@ export default function InformationAssetInventoryPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [researching, setResearching] = useState<number[]>([]);
   const [researchProgress, setResearchProgress] = useState("");
+  const [researchDone, setResearchDone] = useState(0);
+  const [researchTotal, setResearchTotal] = useState(0);
   const [researchModels, setResearchModels] = useState("both");
   const [researchEnabled, setResearchEnabled] = useState(true);
   const [message, setMessage] = useState("");
@@ -70,6 +133,20 @@ export default function InformationAssetInventoryPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<any>(null);
   const [manageDepartments, setManageDepartments] = useState(false);
+  const [expandedCols, setExpandedCols] = useState<string[]>([
+    "businessImpact",
+    "threat",
+    "vulnerability",
+    "existingControls",
+  ]);
+
+  const toggleColumn = (field: string) => {
+    setExpandedCols((current) =>
+      current.includes(field)
+        ? current.filter((item) => item !== field)
+        : [...current, field],
+    );
+  };
 
   const load = async (department = scope) => {
     setLoading(true);
@@ -207,12 +284,15 @@ export default function InformationAssetInventoryPage() {
     setError("");
     setMessage("");
     setResearching(assets.map((asset) => asset.id));
+    setResearchTotal(assets.length);
+    setResearchDone(0);
     let completed = 0;
-    try {
-      for (const [index, draft] of assets.entries()) {
-        setResearchProgress(
-          `Scraping vulnerabilities, then refining with ${researchModelLabel(researchModels)} ${index + 1} of ${assets.length}: ${draft.assetName}`,
-        );
+    const failed: string[] = [];
+    for (const [index, draft] of assets.entries()) {
+      setResearchProgress(
+        `Scraping vulnerabilities, reading Daxon and ORCA, then refining with ${researchModelLabel(researchModels)} ${index + 1} of ${assets.length}: ${draft.assetName}`,
+      );
+      try {
         const saved = await saveAsset(draft, false);
         const response = await api(`/information-assets/${saved.id}/research`, {
           method: "POST",
@@ -225,20 +305,29 @@ export default function InformationAssetInventoryPage() {
           ),
         }));
         completed += 1;
+      } catch (reason) {
+        failed.push(
+          `${draft.assetName}: ${
+            reason instanceof Error ? reason.message : "research failed"
+          }`,
+        );
       }
+      setResearchDone(index + 1);
+    }
+    if (completed)
       setMessage(
         `${researchModelLabel(researchModels)} research completed for ${completed} asset${completed === 1 ? "" : "s"}.`,
       );
-    } catch (reason) {
+    if (failed.length)
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "Model Garden research could not be completed.",
+        failed.length === 1
+          ? failed[0]
+          : `${failed.length} assets could not be researched. ${failed[0]}`,
       );
-    } finally {
-      setResearching([]);
-      setResearchProgress("");
-    }
+    setResearching([]);
+    setResearchProgress("");
+    setResearchDone(0);
+    setResearchTotal(0);
   };
 
   const researchVisibleAssets = () => {
@@ -262,6 +351,26 @@ export default function InformationAssetInventoryPage() {
         ?.department || "Department"
     : "Whole organization";
   const busyResearching = researching.length > 0;
+  const currentResearchItem =
+    busyResearching && researchTotal
+      ? Math.min(researchDone + 1, researchTotal)
+      : researchDone;
+  const researchPercent = researchTotal
+    ? Math.round((researchDone / researchTotal) * 100)
+    : 0;
+  const researchBarPercent = researchTotal
+    ? Math.min(
+        100,
+        Math.max(
+          busyResearching ? 8 : 0,
+          Math.round(
+            ((researchDone + (researchDone < researchTotal ? 0.4 : 0)) /
+              researchTotal) *
+              100,
+          ),
+        ),
+      )
+    : 0;
 
   return (
     <div className="page asset-inventory-page">
@@ -316,8 +425,9 @@ export default function InformationAssetInventoryPage() {
           >
             {!researchEnabled
               ? "Web research is disabled"
-              : researchProgress ||
-                `Start ${researchModelLabel(researchModels)} research`}
+              : busyResearching
+                ? "Researching…"
+                : `Start ${researchModelLabel(researchModels)} research`}
           </button>
         </div>
       </div>
@@ -331,11 +441,19 @@ export default function InformationAssetInventoryPage() {
           <p>
             Asset names and existing controls come from the current Daxon named
             lists — one row per asset or control. When Daxon answers are
-            revised, this inventory is rebuilt to match.             Research scrapes public vulnerability sources first, then Kimi K2
-            and GLM refine those findings for PDAX — a Philippine crypto
-            investment / digital-asset company. The bulk button researches
-            every visible asset and produces no more than five concise bullets
-            for business impact, threats, and vulnerabilities.
+            revised, this inventory is rebuilt to match. Research scrapes
+            public vulnerability sources first, reads matching Daxon answers
+            and ORCA risks, then Kimi K2 and GLM refine those findings for
+            PDAX. Placeholder schema text is rejected and retried. If web
+            scraping is unavailable, one model drafts from internal records
+            and the other checks it. If GLM does not return usable JSON, it
+            retries twice more before the other model’s result is used. If both
+            models fail to return JSON, research still finishes from Daxon,
+            ORCA, and any public CVEs. The bulk button continues to the next
+            asset if one item fails. It produces two to
+            three short bullets for business impact, threats, and
+            vulnerabilities. Vulnerabilities are mapped to OWASP Top 10:2025
+            and include a CVE/CVSS rating when public research cites one.
           </p>
         </div>
         <div className="asset-inventory-stats">
@@ -394,8 +512,31 @@ export default function InformationAssetInventoryPage() {
           from Daxon.”
         </div>
       ) : (
-        departmentGroups.map(([department, assets]) => (
+        departmentGroups.map(([department, assets], groupIndex) => (
           <section className="asset-department" key={department}>
+            {busyResearching && groupIndex === 0 ? (
+              <div
+                className="asset-research-progress"
+                role="status"
+                aria-live="polite"
+                aria-label={`Research ${researchPercent}% complete`}
+              >
+                <div className="asset-research-progress-copy">
+                  <strong>Research in progress</strong>
+                  <span>
+                    Asset {currentResearchItem} of {researchTotal} ·{" "}
+                    {researchPercent}%
+                  </span>
+                </div>
+                <div className="asset-research-progress-track">
+                  <i
+                    className="is-busy"
+                    style={{ width: `${researchBarPercent}%` }}
+                  />
+                </div>
+                {researchProgress ? <small>{researchProgress}</small> : null}
+              </div>
+            ) : null}
             <div className="asset-department-heading">
               <div>
                 <span>DEPARTMENT ASSET INVENTORY</span>
@@ -410,13 +551,46 @@ export default function InformationAssetInventoryPage() {
                     <th className="importance-col" aria-label="Importance" />
                     <th className="asset-name-col">Asset Name</th>
                     <th>Asset Type</th>
-                    <th className="asset-wide-col">Business Impact</th>
-                    <th className="asset-wide-col">Threat</th>
-                    <th className="asset-wide-col">Vulnerability</th>
+                    {(
+                      [
+                        ["businessImpact", "Business Impact"],
+                        ["threat", "Threat"],
+                        ["vulnerability", "Vulnerability"],
+                      ] as const
+                    ).map(([field, label]) => (
+                      <th
+                        key={field}
+                        className={`asset-wide-col${
+                          expandedCols.includes(field) ? " is-expanded" : ""
+                        }`}
+                        title="Click to widen or compact this column"
+                        onClick={() => toggleColumn(field)}
+                      >
+                        {label}
+                        <span className="asset-col-expand" aria-hidden="true">
+                          {expandedCols.includes(field) ? "Wide" : "Compact"}
+                        </span>
+                      </th>
+                    ))}
                     <th>Likelihood</th>
                     <th>Impact</th>
                     <th>Risk Level</th>
-                    <th className="asset-wide-col">Existing Controls</th>
+                    <th
+                      className={`asset-wide-col${
+                        expandedCols.includes("existingControls")
+                          ? " is-expanded"
+                          : ""
+                      }`}
+                      title="Click to widen or compact this column"
+                      onClick={() => toggleColumn("existingControls")}
+                    >
+                      Existing Controls
+                      <span className="asset-col-expand" aria-hidden="true">
+                        {expandedCols.includes("existingControls")
+                          ? "Wide"
+                          : "Compact"}
+                      </span>
+                    </th>
                     <th className="asset-actions-col">Actions</th>
                   </tr>
                 </thead>
@@ -465,7 +639,12 @@ export default function InformationAssetInventoryPage() {
                         </td>
                         {["businessImpact", "threat", "vulnerability"].map(
                           (field) => (
-                            <td key={field} className="asset-wide-cell">
+                            <td
+                              key={field}
+                              className={`asset-wide-cell${
+                                expandedCols.includes(field) ? " is-expanded" : ""
+                              }`}
+                            >
                               {editing ? (
                                 <textarea
                                   className="asset-bullet-field"
@@ -476,7 +655,10 @@ export default function InformationAssetInventoryPage() {
                                   }
                                 />
                               ) : (
-                                <InventoryValue value={row[field]} />
+                                <InventoryValue
+                                  value={row[field]}
+                                  expanded={expandedCols.includes(field)}
+                                />
                               )}
                             </td>
                           ),
@@ -495,7 +677,13 @@ export default function InformationAssetInventoryPage() {
                             )}
                           </td>
                         ))}
-                        <td className="asset-wide-cell">
+                        <td
+                          className={`asset-wide-cell${
+                            expandedCols.includes("existingControls")
+                              ? " is-expanded"
+                              : ""
+                          }`}
+                        >
                           {editing ? (
                             <textarea
                               className="asset-controls-field"
@@ -508,7 +696,10 @@ export default function InformationAssetInventoryPage() {
                               }
                             />
                           ) : (
-                            <InventoryValue value={row.existingControls} />
+                            <InventoryValue
+                              value={row.existingControls}
+                              expanded={expandedCols.includes("existingControls")}
+                            />
                           )}
                         </td>
                         <td className="asset-actions-col">

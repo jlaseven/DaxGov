@@ -3,14 +3,25 @@ import { z } from "zod";
 import {
   assetResearchPrompt,
   bulletsFromLines,
+  completeFinding,
   completeModelGardenChat,
   draftFromModelJson,
+  draftIsUsable,
+  enrichVulnerabilityLines,
+  extractCvesFromText,
   extractJsonObject,
+  formatKnownCves,
   mergeModelGardenDrafts,
+  MODEL_JSON_ATTEMPTS,
+  modelGardenModels,
+  peerReviewPrompt,
   publisherIdsFor,
   researchModelLabel,
+  researchRetryPrompt,
+  sanitizeInventoryField,
   type CompleteModelGardenChat,
   type ModelGardenDraft,
+  type ModelGardenPublisherId,
   type ResearchModelId,
 } from "./modelGarden.js";
 import { fetchPublicHttp, readLimitedText } from "./security.js";
@@ -30,6 +41,23 @@ export const informationAssetUpdateSchema = z.object({
   riskLevel: z.string().trim().max(200).nullable(),
   existingControls: z.string().trim().max(10_000).nullable(),
 });
+
+export function presentInformationAsset<
+  T extends {
+    businessImpact?: string | null;
+    threat?: string | null;
+    vulnerability?: string | null;
+    existingControls?: string | null;
+  },
+>(asset: T): T {
+  return {
+    ...asset,
+    businessImpact: sanitizeInventoryField(asset.businessImpact ?? null),
+    threat: sanitizeInventoryField(asset.threat ?? null),
+    vulnerability: sanitizeInventoryField(asset.vulnerability ?? null),
+    existingControls: sanitizeInventoryField(asset.existingControls ?? null),
+  };
+}
 
 export function parseDaxonResponses(value: string | null | undefined) {
   try {
@@ -74,12 +102,36 @@ function cleanAssetName(value: string) {
     .trim();
 }
 
-function splitInventoryAnswer(value: string) {
+function splitOutsideParentheses(value: string, separators: string) {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  for (const char of value) {
+    if (char === "(") depth += 1;
+    else if (char === ")" && depth > 0) depth -= 1;
+    if (depth === 0 && separators.includes(char)) {
+      const piece = current.trim();
+      if (piece) parts.push(piece);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  const piece = current.trim();
+  if (piece) parts.push(piece);
+  return parts;
+}
+
+function splitInventoryAnswer(value: string, splitCommas = false) {
   const text = String(value || "").replaceAll("\r", "").trim();
   if (!text) return [];
   const isNamedList =
     /\n/.test(text) || /(?:^|\n)\s*(?:[-*•]|\d+[.)])\s+/.test(text);
-  const parts = isNamedList ? text.split(/\n+/) : text.split(/[;•]+/);
+  const lines = isNamedList ? text.split(/\n+/) : [text];
+  const parts = lines.flatMap((line) => {
+    if (splitCommas) return splitOutsideParentheses(line, ",;•");
+    return isNamedList ? [line] : line.split(/[;•]+/);
+  });
   return parts
     .map(cleanAssetName)
     .filter(
@@ -93,12 +145,13 @@ export function extractAssetNames(
   responses: Record<string, string | number | boolean>,
 ) {
   const items = daxonAssetQuestionIds.flatMap((questionId) =>
-    splitInventoryAnswer(String(responses[questionId] || "")).map(
-      (assetName) => ({
-        assetName,
-        sourceQuestion: questionId,
-      }),
-    ),
+    splitInventoryAnswer(
+      String(responses[questionId] || ""),
+      questionId === "discovery.5.1",
+    ).map((assetName) => ({
+      assetName,
+      sourceQuestion: questionId,
+    })),
   );
 
   const unique = new Map<string, (typeof items)[number]>();
@@ -326,12 +379,11 @@ export function extractWebSearchResults(html: string): WebSearchResult[] {
   return results;
 }
 
-export function resultsToBullets(results: WebSearchResult[], maximum = 5) {
+export function resultsToBullets(results: WebSearchResult[], maximum = 3) {
   const bullets: string[] = [];
   const seen = new Set<string>();
   for (const result of results) {
-    let text = result.snippet.replace(/^\W+/, "").trim();
-    if (text.length > 220) text = `${text.slice(0, 217).trimEnd()}…`;
+    const text = completeFinding(result.snippet.replace(/^\W+/, "").trim(), 2_000);
     const key = text.toLocaleLowerCase("en");
     if (!text || seen.has(key)) continue;
     seen.add(key);
@@ -461,20 +513,474 @@ export function vulnerabilitySearchQueries(subject: string) {
   ];
 }
 
+const DAXON_CONTEXT_LABELS: Record<string, string> = {
+  "discovery.1.1": "Main processes",
+  "discovery.1.2": "Critical processes",
+  "discovery.1.3": "Manual processes",
+  "discovery.2.1": "Information assets",
+  "discovery.2.2": "Sensitive information handling",
+  "discovery.5.1": "Critical systems",
+  "discovery.5.2": "System owners and administrators",
+  "discovery.5.3": "Third-party hosted systems",
+  "discovery.6.1": "Incidents or near misses",
+  "discovery.8.1": "Existing controls",
+  "discovery.8.2": "Needed control improvements",
+  "discovery.8.3": "Department risk concerns",
+};
+
+const SAME_DEPARTMENT_QUESTION_IDS = new Set([
+  "discovery.1.1",
+  "discovery.1.2",
+  "discovery.1.3",
+  "discovery.2.1",
+  "discovery.2.2",
+  "discovery.5.1",
+  "discovery.5.2",
+  "discovery.5.3",
+  "discovery.6.1",
+  "discovery.8.1",
+  "discovery.8.2",
+  "discovery.8.3",
+]);
+
+const RESEARCH_STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "that",
+  "this",
+  "information",
+  "management",
+  "user",
+  "name",
+  "owned",
+  "department",
+  "records",
+  "files",
+  "system",
+  "systems",
+  "application",
+  "applications",
+  "tool",
+  "tools",
+  "none",
+]);
+
+const RESEARCH_ALIASES: Record<string, string[]> = {
+  jumpcloud: [
+    "directory",
+    "sso",
+    "mdm",
+    "uem",
+    "identity",
+    "onboarding",
+    "offboarding",
+    "user management",
+  ],
+  qualys: ["vapt", "vulnerability", "pentest", "scanning", "assessment"],
+  trendmicro: ["endpoint", "malware", "edr", "alert", "monitoring", "quarantine"],
+  slack: ["messaging", "chat", "collaboration"],
+  google: ["email", "workspace", "collaboration", "identity"],
+  workspace: ["email", "collaboration", "identity"],
+  nordpass: ["password", "credential", "secrets", "vault"],
+  kissflow: ["workflow", "ticket", "process"],
+};
+
+const PLACEHOLDER_ANSWER = /this is where we stopped/i;
+
+export type DaxonResearchAssessment = {
+  id?: number;
+  department: string;
+  departmentKey?: string;
+  isActive?: boolean;
+  respondentName?: string | null;
+  questionnaireResponses?: string | null;
+  risks?: Array<{
+    process?: string | null;
+    description?: string | null;
+    existingControls?: string | null;
+    actionPlan?: string | null;
+    inherentRating?: string | null;
+    residualRating?: string | null;
+  }>;
+};
+
+export type OrcaResearchRisk = {
+  riskNo: string;
+  process: string;
+  riskThreat: string;
+  cause?: string | null;
+  impactPerRisk?: string | null;
+  existingKeyControls?: string | null;
+  inherentLikelihood?: string | null;
+  inherentImpactRating?: string | null;
+  residualRiskRemarks?: string | null;
+  inherentRiskScore?: number | null;
+};
+
+function clipResearchText(value: string, maximum = 2_000) {
+  const text = String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/[…]+/g, " ")
+    .replace(/\.{3,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return "";
+  if (text.length <= maximum) return text;
+  const sentence = text.slice(0, maximum).match(/^(.*[.?!])(?=\s|$)/);
+  if (sentence?.[1]?.trim()) return sentence[1].trim();
+  return text;
+}
+
+function usableResearchText(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text || PLACEHOLDER_ANSWER.test(text) || noneToNull(text) == null)
+    return "";
+  return text;
+}
+
+export function researchTokens(value: string) {
+  const unique = new Set<string>();
+  for (const match of String(value || "")
+    .toLocaleLowerCase("en")
+    .match(/[a-z0-9][a-z0-9+.-]{2,}/g) || []) {
+    if (RESEARCH_STOPWORDS.has(match) || /^\d+$/.test(match)) continue;
+    unique.add(match);
+  }
+  return [...unique];
+}
+
+function expandedResearchTokens(value: string) {
+  const tokens = researchTokens(value);
+  const expanded = new Set(tokens);
+  for (const token of tokens) {
+    for (const alias of RESEARCH_ALIASES[token] || []) expanded.add(alias);
+  }
+  return [...expanded];
+}
+
+function textMentionsTokens(value: string, tokens: string[]) {
+  const haystack = value.toLocaleLowerCase("en");
+  return tokens.some((token) => haystack.includes(token));
+}
+
+function scoreResearchText(value: string, tokens: string[]) {
+  const haystack = value.toLocaleLowerCase("en");
+  let score = 0;
+  for (const token of tokens) {
+    if (!haystack.includes(token)) continue;
+    score += token.length >= 6 ? 3 : 2;
+  }
+  return score;
+}
+
+function daxonQuestionLabel(questionId: string) {
+  if (DAXON_CONTEXT_LABELS[questionId]) return DAXON_CONTEXT_LABELS[questionId];
+  if (/^risk\.\d+\.description$/.test(questionId)) return "Raised ISRA risk";
+  if (/^risk\.\d+\.process$/.test(questionId)) return "Risk process";
+  if (/^risk\.\d+\.existingControls$/.test(questionId))
+    return "Risk existing controls";
+  if (/^risk\.\d+\.actionPlan$/.test(questionId)) return "Risk action plan";
+  return questionId;
+}
+
+function includeDaxonQuestion(
+  questionId: string,
+  answer: string,
+  sameDepartment: boolean,
+  tokens: string[],
+) {
+  if (/^risk\.\d+\.(description|process|existingControls|actionPlan)$/.test(
+    questionId,
+  ))
+    return sameDepartment || textMentionsTokens(answer, tokens);
+  if (sameDepartment && SAME_DEPARTMENT_QUESTION_IDS.has(questionId))
+    return true;
+  return textMentionsTokens(answer, tokens);
+}
+
+export function formatDaxonResearchContext(
+  assetName: string,
+  assessments: DaxonResearchAssessment[],
+  departmentKey?: string | null,
+) {
+  const tokens = researchTokens(assetName);
+  if (!tokens.length) return "";
+  const lines: string[] = [];
+  const ranked = [...assessments].sort((left, right) => {
+    const leftSame =
+      Boolean(departmentKey) && left.departmentKey === departmentKey ? 0 : 1;
+    const rightSame =
+      Boolean(departmentKey) && right.departmentKey === departmentKey ? 0 : 1;
+    if (leftSame !== rightSame) return leftSame - rightSame;
+    if (Boolean(left.isActive) !== Boolean(right.isActive))
+      return left.isActive ? -1 : 1;
+    return 0;
+  });
+  for (const assessment of ranked) {
+    const sameDepartment =
+      Boolean(departmentKey) && assessment.departmentKey === departmentKey;
+    const responses = parseDaxonResponses(assessment.questionnaireResponses);
+    const notes: string[] = [];
+    for (const [questionId, value] of Object.entries(responses)) {
+      const answer = usableResearchText(value);
+      if (!answer) continue;
+      if (!includeDaxonQuestion(questionId, answer, sameDepartment, tokens))
+        continue;
+      if (!sameDepartment && !textMentionsTokens(answer, tokens)) continue;
+      notes.push(
+        `- ${daxonQuestionLabel(questionId)}: ${clipResearchText(answer)}`,
+      );
+    }
+    for (const risk of assessment.risks || []) {
+      const description = usableResearchText(risk.description);
+      if (!description) continue;
+      if (!sameDepartment && !textMentionsTokens(description, tokens)) continue;
+      notes.push(
+        `- Raised ISRA risk (${risk.inherentRating || "unrated"} inherent / ${risk.residualRating || "unrated"} residual): ${clipResearchText(
+          [risk.process, description, risk.existingControls, risk.actionPlan]
+            .map(usableResearchText)
+            .filter(Boolean)
+            .join(" · "),
+        )}`,
+      );
+    }
+    if (!notes.length) continue;
+    const who = assessment.respondentName
+      ? ` · ${assessment.respondentName}`
+      : "";
+    lines.push(
+      `${assessment.department}${who}${sameDepartment ? " (source department)" : ""}:`,
+    );
+    lines.push(...notes.slice(0, 8));
+    if (lines.join("\n").length > 3_500) break;
+  }
+  return lines.join("\n").slice(0, 3_500);
+}
+
+export function formatOrcaResearchContext(
+  assetName: string,
+  extraText: string,
+  risks: OrcaResearchRisk[],
+) {
+  const tokens = expandedResearchTokens(`${assetName} ${extraText || ""}`);
+  if (!tokens.length || !risks.length) return "";
+  const ranked = risks
+    .map((risk) => {
+      const blob = [
+        risk.process,
+        risk.riskThreat,
+        risk.cause,
+        risk.impactPerRisk,
+        risk.existingKeyControls,
+        risk.residualRiskRemarks,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return { risk, score: scoreResearchText(blob, tokens) };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return (right.risk.inherentRiskScore || 0) - (left.risk.inherentRiskScore || 0);
+    })
+    .slice(0, 5)
+    .map(({ risk }) => {
+      const impact = usableResearchText(risk.impactPerRisk);
+      const cause = usableResearchText(risk.cause);
+      const controls = usableResearchText(risk.existingKeyControls);
+      return [
+        `- ${risk.riskNo} · ${risk.process}: ${clipResearchText(risk.riskThreat, 280)}`,
+        cause ? `  Cause: ${clipResearchText(cause, 220)}` : "",
+        impact ? `  Business impact: ${clipResearchText(impact, 220)}` : "",
+        controls ? `  Existing controls: ${clipResearchText(controls, 180)}` : "",
+        risk.inherentLikelihood || risk.inherentImpactRating
+          ? `  Ratings: ${[risk.inherentLikelihood, risk.inherentImpactRating].filter(Boolean).join(" / ")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    });
+  return ranked.join("\n");
+}
+
+export async function loadInternalAssetResearchContext(
+  prisma: any,
+  asset: {
+    assetName: string;
+    departmentKey?: string | null;
+    daxonAssessmentId?: number | null;
+  },
+) {
+  const [assessments, orcaRisks] = await Promise.all([
+    prisma.israAssessment.findMany({
+      where: { sourceType: "Daxon Questionnaire" },
+      select: {
+        id: true,
+        department: true,
+        departmentKey: true,
+        isActive: true,
+        respondentName: true,
+        questionnaireResponses: true,
+        risks: {
+          select: {
+            process: true,
+            description: true,
+            existingControls: true,
+            actionPlan: true,
+            inherentRating: true,
+            residualRating: true,
+          },
+        },
+      },
+    }),
+    prisma.orcaRisk.findMany({
+      where: { archivedAt: null },
+      select: {
+        riskNo: true,
+        process: true,
+        riskThreat: true,
+        cause: true,
+        impactPerRisk: true,
+        existingKeyControls: true,
+        inherentLikelihood: true,
+        inherentImpactRating: true,
+        residualRiskRemarks: true,
+        inherentRiskScore: true,
+      },
+    }),
+  ]);
+  const daxonContext = formatDaxonResearchContext(
+    asset.assetName,
+    assessments,
+    asset.departmentKey,
+  );
+  return {
+    daxonContext,
+    orcaContext: formatOrcaResearchContext(
+      asset.assetName,
+      daxonContext,
+      orcaRisks,
+    ),
+  };
+}
+
+function wait(ms: number) {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
+export function fallbackDraftFromEvidence(input: {
+  assetName: string;
+  daxonContext?: string | null;
+  orcaContext?: string | null;
+  publicResearch?: string | null;
+  knownCves?: { id: string; cvss: number | null; rating: string | null }[];
+}) {
+  const name = String(input.assetName || "This asset").trim();
+  const tokens = researchTokens(name);
+  const snippets = [input.daxonContext, input.orcaContext, input.publicResearch]
+    .flatMap((value) =>
+      String(value || "")
+        .split(/\n+/)
+        .map((line) =>
+          completeFinding(usableResearchText(line.replace(/^\s*[-*•]\s*/, ""))),
+        ),
+    )
+    .filter(Boolean);
+  const relevant = snippets.filter((line) => textMentionsTokens(line, tokens));
+  const picked = (relevant.length ? relevant : snippets).slice(0, 4);
+  const cve = input.knownCves?.[0];
+  const businessImpact = [
+    picked[0] ||
+      `${name} unavailability would stop PDAX work that already depends on this system.`,
+    picked[1] ||
+      `A ${name} incident could delay access recovery, trading support, or KYC operations.`,
+  ];
+  const threat = [
+    picked[2] ||
+      `Attackers could abuse ${name} credentials or admin access to reach PDAX staff and customer data.`,
+    picked[3] ||
+      `A supply-chain or misconfiguration issue in ${name} could persist until monitoring detects it.`,
+  ];
+  const vulnerability = [
+    cve
+      ? `${name} has a public vulnerability ${cve.id}${cve.cvss != null ? ` CVSS ${cve.cvss} ${cve.rating || ""}` : ""}.`
+      : `${name} may be exposed through weak access, missing agents, or delayed patching.`,
+    `Logging and owner reviews for ${name} may not catch joiner-leaver or over-privileged access quickly.`,
+  ];
+  return {
+    businessImpact,
+    threat,
+    vulnerability,
+    likelihood: "Medium",
+    impact: "High",
+    riskLevel: "High",
+  };
+}
+
 export type ResearchInformationAssetOptions = {
   models?: ResearchModelId;
   search?: typeof webSearch;
   scrape?: (results: WebSearchResult[]) => Promise<ScrapedPage[]>;
   completeChat?: CompleteModelGardenChat;
+  retryDelayMs?: number;
+  jsonAttempts?: number;
+  daxonContext?: string | null;
+  orcaContext?: string | null;
 };
 
 async function synthesizeWithModel(
   modelId: "kimi" | "glm",
   prompt: string,
   completeChat: CompleteModelGardenChat,
+  options: { jsonAttempts?: number; retryDelayMs?: number } = {},
 ): Promise<ModelGardenDraft> {
-  const text = await completeChat({ modelId, prompt });
-  return draftFromModelJson(extractJsonObject(text));
+  const attempts = Math.max(
+    1,
+    options.jsonAttempts ?? (modelId === "kimi" ? 2 : MODEL_JSON_ATTEMPTS),
+  );
+  const retryDelayMs = options.retryDelayMs ?? 400;
+  const label = modelGardenModels[modelId].label;
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const text = await completeChat({
+        modelId,
+        prompt:
+          attempt === 1
+            ? prompt
+            : researchRetryPrompt(prompt, label, lastError?.message || "unusable reply"),
+      });
+      const draft = draftFromModelJson(extractJsonObject(text));
+      if (!draftIsUsable(draft))
+        throw new Error(
+          `${label} returned placeholder or empty findings instead of asset analysis.`,
+        );
+      return draft;
+    } catch (reason) {
+      lastError =
+        reason instanceof Error ? reason : new Error(String(reason));
+      if (attempt === attempts) break;
+      await wait(retryDelayMs * attempt);
+    }
+  }
+  throw new Error(
+    `${label} did not return usable JSON after ${attempts} attempts: ${lastError?.message || "unknown error"}`,
+  );
+}
+
+function firstPassDraft(
+  publishers: ModelGardenPublisherId[],
+  settled: PromiseSettledResult<ModelGardenDraft>[],
+  modelId: ModelGardenPublisherId,
+) {
+  const index = publishers.indexOf(modelId);
+  const result = index >= 0 ? settled[index] : null;
+  if (!result || result.status !== "fulfilled" || !draftIsUsable(result.value))
+    return null;
+  return result.value;
 }
 
 export async function researchInformationAsset(
@@ -511,20 +1017,120 @@ export async function researchInformationAsset(
     ["Threats", threatResults],
     ["Business impact", impactResults],
   ]);
+  const publicResearch = [initialVulnerabilityResearch, supportingEvidence]
+    .filter(Boolean)
+    .join("\n\n");
+  const knownCves = extractCvesFromText(publicResearch);
   const prompt = assetResearchPrompt(
     assetName,
     assetType,
     initialVulnerabilityResearch,
     supportingEvidence,
+    {
+      daxon: options.daxonContext,
+      orca: options.orcaContext,
+      knownCves: formatKnownCves(knownCves),
+    },
   );
+  const retry = {
+    jsonAttempts: options.jsonAttempts,
+    retryDelayMs: options.retryDelayMs,
+  };
   const settled = await Promise.allSettled(
     publishers.map((modelId) =>
-      synthesizeWithModel(modelId, prompt, completeChat),
+      synthesizeWithModel(modelId, prompt, completeChat, {
+        jsonAttempts:
+          options.jsonAttempts ??
+          (modelId === "kimi" && publishers.includes("glm") ? 1 : undefined),
+        retryDelayMs: options.retryDelayMs,
+      }),
     ),
   );
-  const drafts = settled.flatMap((result) =>
-    result.status === "fulfilled" ? [result.value] : [],
+  const drafts: ModelGardenDraft[] = settled.flatMap((result) =>
+    result.status === "fulfilled" && draftIsUsable(result.value)
+      ? [result.value]
+      : [],
   );
+  const used = new Set(
+    publishers.filter(
+      (modelId, index) =>
+        settled[index]?.status === "fulfilled" &&
+        draftIsUsable((settled[index] as PromiseFulfilledResult<ModelGardenDraft>).value),
+    ),
+  );
+  if (!publicResearch && publishers.includes("glm") && publishers.includes("kimi")) {
+    const glmDraft = firstPassDraft(publishers, settled, "glm");
+    const kimiDraft = firstPassDraft(publishers, settled, "kimi");
+    const authorId: ModelGardenPublisherId | null = glmDraft
+      ? "glm"
+      : kimiDraft
+        ? "kimi"
+        : null;
+    const reviewerId: ModelGardenPublisherId | null =
+      authorId === "glm" ? "kimi" : authorId === "kimi" ? "glm" : null;
+    const authorDraft = authorId === "glm" ? glmDraft : kimiDraft;
+    if (authorId && reviewerId && authorDraft && firstPassDraft(publishers, settled, reviewerId)) {
+      try {
+        const reviewed = await synthesizeWithModel(
+          reviewerId,
+          peerReviewPrompt(
+            assetName,
+            assetType,
+            modelGardenModels[authorId].label,
+            authorDraft,
+            {
+              daxon: options.daxonContext,
+              orca: options.orcaContext,
+              web: publicResearch,
+            },
+          ),
+          completeChat,
+          retry,
+        );
+        if (draftIsUsable(reviewed)) {
+          drafts.push(reviewed);
+          used.add(reviewerId);
+        }
+      } catch {
+        // Keep the first-pass draft when the checker cannot refine it.
+      }
+    }
+  }
+  if (!drafts.length) {
+    const rescue: ModelGardenPublisherId = publishers.includes("glm")
+      ? "kimi"
+      : "glm";
+    if (!publishers.includes(rescue)) {
+      try {
+        const rescued = await synthesizeWithModel(
+          rescue,
+          prompt,
+          completeChat,
+          retry,
+        );
+        if (draftIsUsable(rescued)) {
+          drafts.push(rescued);
+          used.add(rescue);
+        }
+      } catch {
+        // Evidence fallback below still completes the research.
+      }
+    }
+  }
+  let usedFallback = false;
+  if (!drafts.length) {
+    const fallback = fallbackDraftFromEvidence({
+      assetName,
+      daxonContext: options.daxonContext,
+      orcaContext: options.orcaContext,
+      publicResearch,
+      knownCves,
+    });
+    if (draftIsUsable(fallback)) {
+      drafts.push(fallback);
+      usedFallback = true;
+    }
+  }
   if (!drafts.length) {
     const firstError = settled.find((result) => result.status === "rejected");
     const reason =
@@ -536,9 +1142,15 @@ export async function researchInformationAsset(
     throw new Error(reason);
   }
   const merged = mergeModelGardenDrafts(drafts);
-  const businessImpact = bulletsFromLines(merged.businessImpact);
-  const threat = bulletsFromLines(merged.threat);
-  const vulnerability = bulletsFromLines(merged.vulnerability);
+  const businessImpact = sanitizeInventoryField(
+    bulletsFromLines(merged.businessImpact),
+  );
+  const threat = sanitizeInventoryField(bulletsFromLines(merged.threat));
+  const vulnerability = sanitizeInventoryField(
+    bulletsFromLines(
+      enrichVulnerabilityLines(merged.vulnerability, knownCves),
+    ),
+  );
   if (!businessImpact && !threat && !vulnerability)
     throw new Error(
       `${researchModelLabel(models)} did not return usable impact, threat, or vulnerability findings.`,
@@ -556,9 +1168,6 @@ export async function researchInformationAsset(
         items.findIndex((other) => other.url === item.url) === index,
     )
     .slice(0, 15);
-  const used = publishers.filter(
-    (_, index) => settled[index]?.status === "fulfilled",
-  );
   return {
     businessImpact,
     threat,
@@ -567,8 +1176,12 @@ export async function researchInformationAsset(
     ...(merged.impact ? { impact: merged.impact } : {}),
     ...(merged.riskLevel ? { riskLevel: merged.riskLevel } : {}),
     researchSources: JSON.stringify({
-      models: used,
+      models: publishers.filter((modelId) => used.has(modelId)),
       organization: "PDAX",
+      daxon: Boolean(String(options.daxonContext || "").trim()),
+      orca: Boolean(String(options.orcaContext || "").trim()),
+      fallback: usedFallback,
+      peerReview: Boolean(!publicResearch && used.size > 1),
       sources,
     }),
   };
