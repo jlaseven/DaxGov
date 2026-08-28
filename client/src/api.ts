@@ -7,6 +7,12 @@ export class ApiError extends Error {
   }
 }
 
+let onAuthRequired: (() => void) | null = null;
+
+export function setOnAuthRequired(handler: (() => void) | null) {
+  onAuthRequired = handler;
+}
+
 export async function api(path: string, init?: RequestInit) {
   const r = await fetch("/api" + path, {
     credentials: "include",
@@ -29,6 +35,9 @@ export async function api(path: string, init?: RequestInit) {
     const fields = j.details?.fieldErrors
       ? Object.values(j.details.fieldErrors).flat().filter(Boolean)
       : [];
+    if (r.status === 401 && j.error === "Authentication required") {
+      onAuthRequired?.();
+    }
     throw new ApiError(
       fields.length ? fields.join(" ") : j.error || "Request failed",
       r.status,

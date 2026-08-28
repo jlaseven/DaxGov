@@ -2194,6 +2194,19 @@ function ActivityPage() {
     </Page>
   );
 }
+function formatWindow(ms: number) {
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  if (ms % 3_600_000 === 0) {
+    const hours = ms / 3_600_000;
+    return hours === 1 ? "1 hour" : `${hours} hours`;
+  }
+  if (ms % 60_000 === 0) {
+    const minutes = ms / 60_000;
+    return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  }
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  return seconds === 1 ? "1 second" : `${seconds} seconds`;
+}
 function SettingsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin";
@@ -2228,7 +2241,7 @@ function SettingsPage() {
   return (
     <Page
       title="Settings"
-      subtitle="Local database location, snapshots, and restore"
+      subtitle="Local database location, snapshots, restore, and access controls"
     >
       <section className="panel">
         <h2>Appearance</h2>
@@ -2238,15 +2251,77 @@ function SettingsPage() {
         </p>
         <ThemeToggle />
       </section>
+      {info?.session && (
+        <section className="panel">
+          <h2>Sessions</h2>
+          <p>
+            A signed-in session lasts {formatWindow(info.session.ttlMs)}. While
+            you keep using DaxGov, it can renew after{" "}
+            {formatWindow(info.session.slideAfterMs)}. Signing in again ends
+            any earlier session for the same account.
+          </p>
+        </section>
+      )}
+      {info?.rateLimits && (
+        <section className="panel">
+          <h2>Rate limiting</h2>
+          <p>
+            These controls slow brute-force and automated traffic. Change the
+            environment variables and restart the API to adjust them.
+          </p>
+          <div className="tablewrap" style={{ marginTop: 16 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Control</th>
+                  <th>Limit</th>
+                  <th>Window</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Failed password sign-in</td>
+                  <td>{info.rateLimits.login.limit} attempts</td>
+                  <td>{formatWindow(info.rateLimits.login.windowMs)}</td>
+                </tr>
+                <tr>
+                  <td>Account lock after failed sign-ins</td>
+                  <td>{info.rateLimits.accountLock.failures} failures</td>
+                  <td>{formatWindow(info.rateLimits.accountLock.lockMs)}</td>
+                </tr>
+                <tr>
+                  <td>Password change</td>
+                  <td>{info.rateLimits.passwordChange.limit} attempts</td>
+                  <td>
+                    {formatWindow(info.rateLimits.passwordChange.windowMs)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>JumpCloud SSO start and callback</td>
+                  <td>{info.rateLimits.sso.limit} attempts</td>
+                  <td>{formatWindow(info.rateLimits.sso.windowMs)}</td>
+                </tr>
+                <tr>
+                  <td>All API requests</td>
+                  <td>{info.rateLimits.api.limit} requests</td>
+                  <td>{formatWindow(info.rateLimits.api.windowMs)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <section className="panel">
         <h2>Application</h2>
         <p>
           {info?.fileBackups === false
-            ? "DaxGov is using a remote database. File snapshots stay on SQLite; Amazon RDS backups are managed in AWS."
+            ? "DaxGov is using Aurora Serverless. File snapshots stay on SQLite; Aurora backups are managed in AWS Secrets Manager and RDS snapshots."
             : "DaxGov runs locally. Data remains in the SQLite database on this computer."}
         </p>
         <p>
-          <b>API:</b> localhost:5174 · <b>UI:</b> localhost:5173
+          {window.location.port === "5173"
+            ? "API: localhost:5174 · UI: localhost:5173"
+            : "The UI and API are served from this address as a single-page application."}
         </p>
         {info && (
           <p>
@@ -2266,7 +2341,8 @@ function SettingsPage() {
         {info?.fileBackups === false ? (
           <p>
             File backup and restore are disabled while the app is pointed at
-            Amazon RDS. Use RDS snapshots and point-in-time recovery in AWS.
+            Aurora Serverless. Use Aurora snapshots and point-in-time recovery
+            in AWS.
           </p>
         ) : !isAdmin ? (
           <p>

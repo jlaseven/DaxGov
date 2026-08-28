@@ -2,11 +2,16 @@ import crypto from "node:crypto";
 import type { PrismaClient, User } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import type { NextFunction, Request, Response } from "express";
-import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import type { LogFn } from "./activityLog.js";
 import { passwordLoginEnabled } from "./ssoConfig.js";
 import { assetResearchEnabled } from "./features.js";
+import {
+  ACCOUNT_LOCK_AFTER,
+  ACCOUNT_LOCK_MS,
+  loginRateLimiter,
+  passwordChangeRateLimiter,
+} from "./rateLimits.js";
 import { isHttpsRequest } from "./security.js";
 
 export const LOGIN_ERROR = "Invalid username or password.";
@@ -15,7 +20,7 @@ export const FORBIDDEN = "Forbidden";
 export const SESSION_COOKIE = "cybergov_session";
 export const BOOTSTRAP_ADMIN_USERNAME = "admin";
 export const BOOTSTRAP_ADMIN_PASSWORD = "ChangeMe-Admin-12";
-export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+export const SESSION_TTL_MS = 60 * 60 * 1000;
 export const SESSION_SLIDE_AFTER_MS = 15 * 60 * 1000;
 
 export const GRANTABLE_PAGES = [
@@ -339,13 +344,16 @@ export async function createSession(
   userId: number,
 ) {
   const token = crypto.randomBytes(32).toString("hex");
-  await prisma.session.create({
-    data: {
-      userId,
-      tokenHash: hashToken(token),
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
-    },
-  });
+  await prisma.$transaction([
+    prisma.session.deleteMany({ where: { userId } }),
+    prisma.session.create({
+      data: {
+        userId,
+        tokenHash: hashToken(token),
+        expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      },
+    }),
+  ]);
   res.cookie(SESSION_COOKIE, token, cookieOptions(req));
 }
 
@@ -395,26 +403,6 @@ export const loginBodySchema = z
   })
   .strip();
 
-export function loginRateLimiter() {
-  const windowMs = Number(process.env.LOGIN_WINDOW_MS) || 15 * 60 * 1000;
-  const limit = Number(process.env.LOGIN_MAX_ATTEMPTS) || 5;
-  return rateLimit({
-    windowMs,
-    limit,
-    skipSuccessfulRequests: true,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many attempts. Try again later." },
-    validate: false,
-    keyGenerator: (req) => {
-      const username = String((req.body as { username?: string } | undefined)?.username || "")
-        .trim()
-        .toLowerCase();
-      return `${req.ip || "127.0.0.1"}:${username}`;
-    },
-  });
-}
-
 export function bootstrapAdminPassword() {
   return process.env.BOOTSTRAP_ADMIN_PASSWORD || BOOTSTRAP_ADMIN_PASSWORD;
 }
@@ -444,8 +432,6 @@ export async function ensureBootstrapAdmin(prisma: PrismaClient) {
   return { created: true as const };
 }
 
-const ACCOUNT_LOCK_AFTER = 8;
-const ACCOUNT_LOCK_MS = 15 * 60 * 1000;
 const loginLocks = new Map<string, { fails: number; lockedUntil: number }>();
 const bootstrapPasswordCache = new Map<string, boolean>();
 
@@ -685,7 +671,7 @@ export function registerAuthRoutes(
     });
   });
 
-  app.post("/api/me/password", async (req, res, next) => {
+  app.post("/api/me/password", passwordChangeRateLimiter(), async (req, res, next) => {
     try {
       const user = currentUser(res);
       if (!user) return res.status(401).json({ error: AUTH_REQUIRED });

@@ -18,6 +18,19 @@ dist-server/
 # Packaged Windows binary
 for windows/*.exe
 
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform/*.tfvars
+!terraform/*.tfvars.example
+
 # OS junk
 .DS_Store
 **/.DS_Store
+

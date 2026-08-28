@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type { Express, Request, Response } from "express";
-import rateLimit from "express-rate-limit";
 import type { LogFn } from "./activityLog.js";
 import { createSession, destroySession, toAuthUser } from "./auth.js";
+import { ssoRateLimiter } from "./rateLimits.js";
 import { isHttpsRequest, requestOrigin } from "./security.js";
 import {
   candidateUsernames,
@@ -225,14 +225,8 @@ export function registerJumpCloudRoutes(
   prisma: PrismaClient,
   log: LogFn,
 ) {
-  const startLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many attempts. Try again later." },
-    validate: false,
-  });
+  const startLimiter = ssoRateLimiter();
+  const callbackLimiter = ssoRateLimiter();
 
   app.get("/api/auth/sso", (_req, res) => {
     res.json({ data: jumpcloudPublicConfig() });
@@ -285,7 +279,7 @@ export function registerJumpCloudRoutes(
     }
   });
 
-  app.get("/api/auth/jumpcloud/callback", async (req, res, next) => {
+  app.get("/api/auth/jumpcloud/callback", callbackLimiter, async (req, res, next) => {
     try {
       if (!jumpcloudOidcEnabled())
         return res.redirect(ssoErrorRedirect("not_configured"));

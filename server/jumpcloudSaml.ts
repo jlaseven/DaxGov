@@ -2,9 +2,9 @@ import type { PrismaClient } from "@prisma/client";
 import { SAML, ValidateInResponseTo } from "@node-saml/node-saml";
 import type { Express, Request, Response } from "express";
 import express from "express";
-import rateLimit from "express-rate-limit";
 import type { LogFn } from "./activityLog.js";
 import { createSession, destroySession, type AuthUser } from "./auth.js";
+import { ssoRateLimiter } from "./rateLimits.js";
 import { requestOrigin } from "./security.js";
 import {
   claimsFromSamlProfile,
@@ -92,14 +92,8 @@ export function registerJumpCloudSamlRoutes(
     claims: JumpCloudClaims,
   ) => Promise<AuthUser | null>,
 ) {
-  const startLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many attempts. Try again later." },
-    validate: false,
-  });
+  const startLimiter = ssoRateLimiter();
+  const acsLimiter = ssoRateLimiter();
 
   app.get(JUMPCLOUD_SAML_START_PATH, startLimiter, async (req, res, next) => {
     try {
@@ -127,6 +121,7 @@ export function registerJumpCloudSamlRoutes(
 
   app.post(
     JUMPCLOUD_SAML_ACS_PATH,
+    acsLimiter,
     express.urlencoded({ extended: false, limit: "1mb" }),
     async (req, res) => {
       try {

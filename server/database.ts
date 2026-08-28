@@ -1,7 +1,7 @@
 export type DatabaseEngine = "sqlite" | "postgresql" | "mysql" | "unknown";
 
 export const FILE_BACKUP_UNSUPPORTED =
-  "File backups are only available with the local SQLite database. Use Amazon RDS snapshots after you migrate.";
+  "File backups are only available with the local SQLite database. Use Aurora snapshots after you migrate.";
 
 export function databaseUrl(raw = process.env.DATABASE_URL) {
   return String(raw || "file:./governance.db").trim();
@@ -65,7 +65,9 @@ export function publicDatabaseStatus(url = databaseUrl()) {
     fileBackups: false,
     label:
       engine === "postgresql"
-        ? "Amazon RDS (PostgreSQL)"
+        ? parts.host?.includes("rds.amazonaws.com")
+          ? "Aurora Serverless (PostgreSQL)"
+          : "PostgreSQL"
         : engine === "mysql"
           ? "Amazon RDS (MySQL)"
           : "Remote database",

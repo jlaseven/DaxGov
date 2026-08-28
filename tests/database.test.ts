@@ -21,7 +21,7 @@ describe("database provider", () => {
     );
   });
 
-  it("recognizes Amazon RDS PostgreSQL URLs without exposing the password", () => {
+  it("recognizes Aurora PostgreSQL URLs without exposing the password", () => {
     const url =
       "postgresql://daxgov:super-secret@governance.abc.ap-southeast-1.rds.amazonaws.com:5432/daxgov";
     expect(databaseEngine(url)).toBe("postgresql");
@@ -30,7 +30,7 @@ describe("database provider", () => {
     expect(publicDatabaseStatus(url)).toEqual({
       engine: "postgresql",
       fileBackups: false,
-      label: "Amazon RDS (PostgreSQL)",
+      label: "Aurora Serverless (PostgreSQL)",
       host: "governance.abc.ap-southeast-1.rds.amazonaws.com",
       port: "5432",
       database: "daxgov",

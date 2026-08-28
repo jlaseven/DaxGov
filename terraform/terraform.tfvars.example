@@ -1,0 +1,12 @@
+aws_region            = "ap-southeast-1"
+name                  = "daxgov"
+vpc_cidr              = "10.80.0.0/16"
+database_name         = "daxgov"
+database_username     = "daxgov"
+aurora_engine_version = "16.6"
+aurora_min_acu        = 0.5
+aurora_max_acu        = 4
+desired_count         = 1
+image_tag             = "latest"
+# certificate_arn     = "arn:aws:acm:ap-southeast-1:123456789012:certificate/..."
+# allowed_ingress_cidrs = ["x.x.x.x/32"]

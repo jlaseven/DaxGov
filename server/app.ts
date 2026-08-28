@@ -1,6 +1,5 @@
 import express from "express";
 import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { differenceInCalendarDays } from "date-fns";
@@ -11,6 +10,8 @@ import {
   registerAuthRoutes,
   requireAuthAndPage,
   requirePasswordChange,
+  SESSION_SLIDE_AFTER_MS,
+  SESSION_TTL_MS,
   verifyCurrentPassword,
 } from "./auth.js";
 import { registerUserRoutes } from "./users.js";
@@ -84,6 +85,8 @@ import { computeOrcaScores, orcaSchema } from "./orca.js";
 import { registerKriRoutes } from "./kris.js";
 import { registerRiskMonitoringRoutes } from "./riskMonitoringRoutes.js";
 import { registerJumpCloudRoutes } from "./jumpcloud.js";
+import { apiRateLimiter, rateLimitControls } from "./rateLimits.js";
+import { registerSpaRoutes } from "./spa.js";
 
 export const prisma = new PrismaClient();
 const app = express();
@@ -93,7 +96,8 @@ app.use(helmetMiddleware());
 app.use(cookieParser());
 app.use(rejectForeignOrigins());
 app.use(requireRequestedWith());
-app.use(noStoreApi());
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.use("/api", noStoreApi());
 app.use(
   "/api/settings/restore-upload",
   express.raw({ type: "application/octet-stream", limit: "80mb" }),
@@ -109,16 +113,7 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "15mb", reviver: jsonReviver }));
-app.use(
-  "/api",
-  rateLimit({
-    windowMs: 60_000,
-    limit: 300,
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: false,
-  }),
-);
+app.use("/api", apiRateLimiter());
 app.use("/api", attachSession(prisma));
 app.use("/api", withAuditContext());
 app.use("/api", requireAuthAndPage());
@@ -1811,7 +1806,18 @@ app.get("/api/settings/database", async (_req, res, next) => {
       databaseStatus(),
       listSnapshots(),
     ]);
-    res.json({ data: { ...database, snapshots } });
+    res.json({
+      data: {
+        ...database,
+        snapshots,
+        rateLimits: rateLimitControls(),
+        session: {
+          ttlMs: SESSION_TTL_MS,
+          slideAfterMs: SESSION_SLIDE_AFTER_MS,
+          concurrent: false,
+        },
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -1891,6 +1897,7 @@ app.post("/api/settings/restore-upload", async (req, res, next) => {
     next(error);
   }
 });
+registerSpaRoutes(app);
 app.use((err: any, _req: any, res: any, _next: any) => {
   if (err instanceof z.ZodError)
     return res

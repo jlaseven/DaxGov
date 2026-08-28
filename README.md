@@ -1,6 +1,8 @@
 # Cybersecurity Governance Dashboard
 
-Local-only React + Express + Prisma/SQLite app for cybersecurity governance registers, TPSA monitoring, ISRA, and related modules. The API binds to `localhost` by default (`HOST` can be set later for AWS). JumpCloud SSO and Amazon RDS are prepared in code but stay off until you configure them. The live database is still SQLite.
+Local React + Express + Prisma app for cybersecurity governance registers, TPSA monitoring, ISRA, and related modules. The UI is a single-page application (SPA). In development Vite serves it on port 5173 and proxies `/api` to Express. In production Express serves the built SPA and API from the same origin.
+
+Local development still uses SQLite (`prisma/governance.db`). AWS deployments use Aurora Serverless v2 (PostgreSQL) in a dedicated VPC, with database credentials stored in AWS Secrets Manager.
 
 ## Run locally
 
@@ -15,6 +17,15 @@ npm run dev
 - API: `http://localhost:5174`
 
 The SQLite database is `prisma/governance.db`. Do not replace or reset it unless you intend to wipe governance records.
+
+To run the production SPA locally (UI and API on one port):
+
+```bash
+npm run build
+npm start
+```
+
+Then open `http://localhost:5174`. `HOST` can be set for AWS (`0.0.0.0`).
 
 ## Sign in
 
@@ -49,22 +60,42 @@ Passwords, hashes, and session tokens are never written. Existing SQLite activit
 
 ## Scripts
 
-- `npm test` — unit and auth HTTP tests (auth HTTP uses a temporary SQLite file, not `governance.db`)
+- `npm test` — frontend (jsdom) and API unit/HTTP tests (HTTP suites use a temporary SQLite file, not `governance.db`)
+- `npm run test:client` — React/jsdom unit tests only
+- `npm run test:api` — server unit and HTTP tests only
 - `npm run typecheck`
 - `npm run build`
 - `npm run db:prepare-rds` — write a PostgreSQL Prisma schema under `deploy/rds/` without touching `governance.db`
 - `npm run db:export-sqlite` — copy current SQLite rows to `deploy/rds/export.json` when you are ready to migrate
 
-## Later: Amazon RDS
+## AWS: dedicated VPC, Aurora Serverless, Secrets Manager
 
-The running app still uses `DATABASE_URL=file:./governance.db`. Do not change that until you are ready to migrate. When you are:
+Terraform in `terraform/` creates a VPC used only by DaxGov, Aurora PostgreSQL Serverless v2, an Application Load Balancer, ECS Fargate, and an RDS-managed Secrets Manager secret for the database password. The container loads that secret at startup and never takes a password as a plaintext environment variable.
 
-1. Keep a copy of `prisma/governance.db`.
-2. Run `npm run db:export-sqlite`.
-3. Run `npm run db:prepare-rds` and point a new Prisma generate/migrate at empty RDS PostgreSQL.
-4. Set `DATABASE_URL` to the RDS URL (`postgresql://...`). File backup/restore in Settings then turns off; use RDS snapshots.
+1. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and set the region, CIDR, and optional ACM certificate ARN.
+2. Create the registry first, then push the image, then apply the rest:
 
-## Later: JumpCloud SSO
+```bash
+cd terraform
+terraform init
+terraform apply -target=aws_ecr_repository.app
+cd ..
+./scripts/push-ecr.sh "$(terraform -chdir=terraform output -raw ecr_repository_url)"
+cd terraform
+terraform apply
+```
+
+3. Open the `app_url` output. The first Administrator is still `admin` / `ChangeMe-Admin-12` until you change it.
+
+The ECS task receives `DATABASE_SECRET_ARN`. On boot it calls Secrets Manager, builds `DATABASE_URL` with `sslmode=require`, runs `prisma db push`, then serves the SPA from `/` and the API from `/api`. Health checks use `GET /health`.
+
+Aurora is in private data subnets and accepts TCP 5432 only from the app security group. File backup/restore in Settings stays SQLite-only; use Aurora snapshots in AWS after you migrate.
+
+To copy local SQLite rows into Aurora, run `npm run db:export-sqlite` before cutover and load `deploy/rds/export.json` with a one-off import against the cluster. Keep a copy of `prisma/governance.db`.
+
+Optional: set `certificate_arn` to an ACM certificate in the same region so the load balancer serves HTTPS and redirects HTTP.
+
+## JumpCloud SSO
 
 Local username/password stays on until JumpCloud SSO is configured. Create the DaxGov user first. JumpCloud sign-in matches `preferred_username`, SAML `username`/`NameID`, or the email local-part to `User.username`. Unmatched accounts are not created automatically.
 

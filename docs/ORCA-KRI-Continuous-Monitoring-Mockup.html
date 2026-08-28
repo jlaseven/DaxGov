@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DaxGov — ORCA ↔ KRI Continuous Monitoring (UI Mockup)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-page: #f3f6fa;
+      --bg-surface: #ffffff;
+      --bg-muted: #f5f8fc;
+      --bg-hover: #edf4fc;
+      --text: #18243b;
+      --text-muted: #61708a;
+      --text-heading: #0a2347;
+      --text-accent: #0b4f9c;
+      --border: #e0e7f0;
+      --border-strong: #cbd5e1;
+      --accent: #0759a8;
+      --sidebar-bg: #071b38;
+      --sidebar-text: #bac8dc;
+      --sidebar-active: #123765;
+      --button-text: #24405f;
+      --icon: #4da3ff;
+      --good: #15803d;
+      --good-bg: #dcfce7;
+      --warn: #b45309;
+      --warn-bg: #fef3c7;
+      --bad: #b91c1c;
+      --bad-bg: #fee2e2;
+      --gray: #475569;
+      --gray-bg: #e2e8f0;
+      --blue: #1d4ed8;
+      --blue-bg: #dbeafe;
+    }
+    html[data-theme="dark"] {
+      --bg-page: #0b1524;
+      --bg-surface: #142338;
+      --bg-muted: #1b2d46;
+      --bg-hover: #1e3654;
+      --text: #e8eef7;
+      --text-muted: #9fb2c8;
+      --text-heading: #f3f7fc;
+      --text-accent: #7cbcff;
+      --border: #2a3f59;
+      --border-strong: #3a5270;
+      --accent: #3b82f6;
+      --sidebar-bg: #07111f;
+      --sidebar-text: #9fb2c8;
+      --sidebar-active: #1a3354;
+      --button-text: #d6e4f4;
+      --icon: #7cbcff;
+      --good: #4ade80;
+      --good-bg: #14532d;
+      --warn: #fbbf24;
+      --warn-bg: #422006;
+      --bad: #f87171;
+      --bad-bg: #450a0a;
+      --gray: #cbd5e1;
+      --gray-bg: #1e293b;
+      --blue: #93c5fd;
+      --blue-bg: #1e3a5f;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; font-family: Inter, ui-sans-serif, system-ui; background: var(--bg-page); color: var(--text); }
+    .app { display: flex; min-height: 100vh; }
+    aside { width: 250px; background: var(--sidebar-bg); color: white; position: fixed; height: 100vh; z-index: 2; }
+    .brand { height: 70px; display: flex; align-items: center; gap: 12px; padding: 0 22px; font-size: 20px; font-weight: 800; }
+    .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: #3b82f6; display: grid; place-items: center; font-size: 14px; }
+    nav { padding: 10px; }
+    nav button { display: flex; align-items: center; gap: 13px; width: 100%; color: var(--sidebar-text); background: none; border: 0; text-align: left; padding: 12px; border-radius: 8px; margin: 3px 0; font-size: 14px; font-family: inherit; cursor: pointer; }
+    nav button:hover, nav button.active { background: var(--sidebar-active); color: white; }
+    .nav-section { color: #6b7d96; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 16px 12px 6px; }
+    .mock-flag { margin: 16px 14px; padding: 10px 12px; border-radius: 8px; background: #123765; color: #9ec5ff; font-size: 11px; line-height: 1.45; }
+    main { margin-left: 250px; width: calc(100% - 250px); }
+    header { height: 70px; background: var(--bg-surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; padding: 0 26px; color: var(--text-muted); }
+    header h1 { margin: 0; font-size: 18px; color: var(--text-heading); flex: 1; }
+    .page { padding: 22px 26px 48px; }
+    .banner { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 12px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 18px; line-height: 1.5; }
+    html[data-theme="dark"] .banner { background: #422006; border-color: #854d0e; color: #fde68a; }
+    .cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .cards.seven { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .card .label { font-size: 12px; color: var(--text-muted); }
+    .card .value { font-size: 26px; font-weight: 800; color: var(--text-heading); margin-top: 4px; }
+    .card .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .grid-2 { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .panel { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .panel h2 { margin: 0 0 12px; font-size: 15px; color: var(--text-heading); }
+    .caption { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; font-size: 11px; color: var(--text-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: var(--bg-hover); }
+    .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 650; white-space: nowrap; }
+    .b-good { background: var(--good-bg); color: var(--good); }
+    .b-warn { background: var(--warn-bg); color: var(--warn); }
+    .b-bad { background: var(--bad-bg); color: var(--bad); }
+    .b-gray { background: var(--gray-bg); color: var(--gray); }
+    .b-blue { background: var(--blue-bg); color: var(--blue); }
+    .btn { border: 1px solid var(--border-strong); background: var(--bg-surface); color: var(--button-text); border-radius: 8px; padding: 7px 10px; font-size: 12px; font-family: inherit; cursor: pointer; }
+    .btn:hover { background: var(--bg-hover); }
+    .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .btn-danger { background: #b91c1c; color: white; border-color: #b91c1c; }
+    .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    select, input, textarea { font-family: inherit; font-size: 13px; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; background: var(--bg-surface); color: var(--text); }
+    textarea { width: 100%; min-height: 80px; }
+    .hidden { display: none !important; }
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+    .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; font-family: inherit; color: var(--text-muted); cursor: pointer; }
+    .tabs button.active { color: var(--text-accent); border-bottom-color: var(--accent); font-weight: 650; }
+    .alert { background: var(--bad-bg); color: var(--bad); border: 1px solid #fecaca; border-radius: 10px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .drawer { position: fixed; inset: 0 0 0 auto; width: min(720px, 92vw); background: var(--bg-surface); border-left: 1px solid var(--border); z-index: 20; box-shadow: none; overflow: auto; }
+    .overlay { position: fixed; inset: 0; background: rgba(7, 27, 56, 0.35); z-index: 19; }
+    .drawer-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+    .drawer-body { padding: 18px 20px; }
+    .modal { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; }
+    .modal-card { width: min(640px, 92vw); background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .donut-wrap, .bars, .gauge { display: flex; gap: 16px; align-items: center; }
+    .legend { font-size: 12px; color: var(--text-muted); line-height: 1.8; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 6px; }
+    .bar-row { display: grid; grid-template-columns: 48px 1fr; gap: 8px; align-items: center; font-size: 12px; margin: 6px 0; }
+    .bar { height: 16px; display: flex; border-radius: 4px; overflow: hidden; background: var(--bg-muted); }
+    .seg { height: 100%; }
+    .attn { display: grid; gap: 8px; }
+    .attn-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--bg-muted); }
+    .wizard-steps { display: flex; gap: 8px; margin-bottom: 16px; }
+    .wiz { flex: 1; padding: 8px; border-radius: 8px; background: var(--bg-muted); font-size: 12px; text-align: center; color: var(--text-muted); }
+    .wiz.on { background: var(--blue-bg); color: var(--blue); font-weight: 650; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); }
+    .field.full { grid-column: 1 / -1; }
+    .preview { margin-top: 12px; padding: 12px; background: var(--bg-muted); border-radius: 8px; font-size: 13px; }
+    .calc { font-size: 28px; font-weight: 800; margin-top: 8px; }
+    .spark { display: flex; gap: 10px; align-items: flex-end; height: 90px; }
+    .spark span { width: 14px; border-radius: 3px 3px 0 0; }
+    .muted { color: var(--text-muted); }
+    .small { font-size: 12px; }
+    @media (max-width: 1200px) {
+      .cards, .cards.seven, .grid-2, .grid-3 { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 900px) {
+      aside { display: none; }
+      main { margin-left: 0; width: 100%; }
+      .cards, .cards.seven, .grid-2, .grid-3, .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand"><span class="brand-mark">D</span> DaxGov</div>
+      <nav>
+        <div class="nav-section">Current app</div>
+        <button data-view="dashboard" class="active">Dashboard</button>
+        <button data-view="orca">ORCA</button>
+        <button data-view="kris">KRIs</button>
+        <div class="nav-section">This upgrade</div>
+        <button data-view="coverage">Risk Monitoring</button>
+        <button data-view="wizard">Define KRI</button>
+      </nav>
+      <div class="mock-flag">
+        Visual mockup only. Sample data from the specification’s Definition of Done (CYB-3-6 / Offboarding Exceptions). Application code has not been changed.
+      </div>
+    </aside>
+
+    <main>
+      <header>
+        <h1 id="pageTitle">Management Risk Monitoring Status</h1>
+        <button class="btn" id="themeBtn">Dark</button>
+        <span class="small muted">August 2026 · Mockup</span>
+      </header>
+
+      <div class="page">
+        <div class="banner">
+          <strong>What this shows:</strong> after the upgrade, KRIs actually monitor ORCA risks.
+          A user enters <strong>actual result 3</strong> for Offboarding Exceptions → DaxGov calculates <strong>BREACHED</strong> →
+          an ORCA risk review is required for <strong>CYB-3-6</strong> → residual risk does <em>not</em> change until a human decides.
+        </div>
+
+        <!-- DASHBOARD -->
+        <section id="view-dashboard">
+          <div class="cards">
+            <div class="card"><div class="label">KRI Coverage</div><div class="value">67%</div><div class="hint">2 of 3 required risks covered</div></div>
+            <div class="card"><div class="label">Breached KRIs</div><div class="value" style="color:var(--bad)">1</div><div class="hint">Current period · Aug 2026</div></div>
+            <div class="card"><div class="label">High / Critical residual</div><div class="value">9</div><div class="hint">From ORCA residual ratings</div></div>
+            <div class="card"><div class="label">Overdue KRI submissions</div><div class="value" style="color:var(--warn)">2</div><div class="hint">Past period, no value entered</div></div>
+            <div class="card"><div class="label">Open risk reviews</div><div class="value" style="color:var(--bad)">1</div><div class="hint">KRI-triggered · CYB-3-6</div></div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel">
+              <h2>Risk Monitoring Effectiveness</h2>
+              <div class="gauge">
+                <svg width="220" height="120" viewBox="0 0 220 120">
+                  <path d="M20 100 A90 90 0 0 1 200 100" fill="none" stroke="#e2e8f0" stroke-width="16" />
+                  <path d="M20 100 A90 90 0 0 1 200 100" fill="none" stroke="#16a34a" stroke-width="16" stroke-dasharray="212 283" stroke-linecap="round" />
+                  <text x="110" y="88" text-anchor="middle" font-size="28" font-weight="800" fill="currentColor">76</text>
+                  <text x="110" y="108" text-anchor="middle" font-size="11" fill="#61708a">Good · /100</text>
+                </svg>
+                <div class="legend">
+                  Coverage 67% × 0.40<br />
+                  On-time submissions 88% × 0.25<br />
+                  Breach reviews resolved 80% × 0.20<br />
+                  High/Critical coverage 78% × 0.15<br />
+                  <strong>This is not an ORCA residual rating.</strong>
+                </div>
+              </div>
+              <div class="caption">0–20 Critical · 21–40 Weak · 41–60 Watch · 61–80 Good · 81–100 Strong</div>
+            </div>
+            <div class="panel">
+              <h2>Residual Risk Distribution</h2>
+              <div class="donut-wrap">
+                <svg width="140" height="140" viewBox="0 0 42 42">
+                  <circle cx="21" cy="21" r="15.9" fill="none" stroke="#fecaca" stroke-width="8" stroke-dasharray="10 100" transform="rotate(-90 21 21)" />
+                  <circle cx="21" cy="21" r="15.9" fill="none" stroke="#f97316" stroke-width="8" stroke-dasharray="26.7 100" stroke-dashoffset="-10" transform="rotate(-90 21 21)" />
+                  <circle cx="21" cy="21" r="15.9" fill="none" stroke="#eab308" stroke-width="8" stroke-dasharray="50 100" stroke-dashoffset="-36.7" transform="rotate(-90 21 21)" />
+                  <circle cx="21" cy="21" r="15.9" fill="none" stroke="#22c55e" stroke-width="8" stroke-dasharray="13.3 100" stroke-dashoffset="-86.7" transform="rotate(-90 21 21)" />
+                </svg>
+                <div class="legend">
+                  <span class="dot" style="background:#fecaca"></span>Critical 3<br />
+                  <span class="dot" style="background:#f97316"></span>High 8<br />
+                  <span class="dot" style="background:#eab308"></span>Medium 15<br />
+                  <span class="dot" style="background:#22c55e"></span>Low 4
+                </div>
+              </div>
+              <div class="caption">Source: ORCA residual ratings · Assessment 2026</div>
+            </div>
+          </div>
+
+          <div class="grid-3">
+            <div class="panel">
+              <h2>KRI Health (Aug 2026)</h2>
+              <div class="donut-wrap">
+                <svg width="120" height="120" viewBox="0 0 42 42">
+                  <circle cx="21" cy="21" r="15.9" fill="none" stroke="#22c55e" stroke-width="8" stroke-dasharray="53 100" transform="rotate(-90 21 21)" />
+                  <circle cx="21" cy="21" r="15.9" fill="none" stroke="#eab308" stroke-width="8" stroke-dasharray="20 100" stroke-dashoffset="-53" transform="rotate(-90 21 21)" />
+                  <circle cx="21" cy="21" r="15.9" fill="none" stroke="#ef4444" stroke-width="8" stroke-dasharray="13 100" stroke-dashoffset="-73" transform="rotate(-90 21 21)" />
+                  <circle cx="21" cy="21" r="15.9" fill="none" stroke="#94a3b8" stroke-width="8" stroke-dasharray="14 100" stroke-dashoffset="-86" transform="rotate(-90 21 21)" />
+                </svg>
+                <div class="legend">
+                  <span class="dot" style="background:#22c55e"></span>Good 8<br />
+                  <span class="dot" style="background:#eab308"></span>Warning 3<br />
+                  <span class="dot" style="background:#ef4444"></span>Breached 2<br />
+                  <span class="dot" style="background:#94a3b8"></span>Overdue 2
+                </div>
+              </div>
+            </div>
+            <div class="panel">
+              <h2>KRI Status Trend</h2>
+              <div>
+                <div class="bar-row"><span>Mar</span><div class="bar"><div class="seg" style="width:70%;background:#22c55e"></div><div class="seg" style="width:20%;background:#eab308"></div><div class="seg" style="width:10%;background:#ef4444"></div></div></div>
+                <div class="bar-row"><span>Apr</span><div class="bar"><div class="seg" style="width:67%;background:#22c55e"></div><div class="seg" style="width:20%;background:#eab308"></div><div class="seg" style="width:13%;background:#ef4444"></div></div></div>
+                <div class="bar-row"><span>May</span><div class="bar"><div class="seg" style="width:73%;background:#22c55e"></div><div class="seg" style="width:20%;background:#eab308"></div><div class="seg" style="width:7%;background:#ef4444"></div></div></div>
+                <div class="bar-row"><span>Jun</span><div class="bar"><div class="seg" style="width:60%;background:#22c55e"></div><div class="seg" style="width:27%;background:#eab308"></div><div class="seg" style="width:13%;background:#ef4444"></div></div></div>
+                <div class="bar-row"><span>Jul</span><div class="bar"><div class="seg" style="width:53%;background:#22c55e"></div><div class="seg" style="width:27%;background:#eab308"></div><div class="seg" style="width:20%;background:#ef4444"></div></div></div>
+                <div class="bar-row"><span>Aug</span><div class="bar"><div class="seg" style="width:53%;background:#22c55e"></div><div class="seg" style="width:20%;background:#eab308"></div><div class="seg" style="width:13%;background:#ef4444"></div><div class="seg" style="width:14%;background:#94a3b8"></div></div></div>
+              </div>
+              <div class="caption">Stacked counts: Good · Warning · Breached · Missing</div>
+            </div>
+            <div class="panel">
+              <h2>Management Attention</h2>
+              <div class="attn">
+                <div class="attn-item"><span>Normal</span><span class="badge b-good">18</span></div>
+                <div class="attn-item"><span>Watch</span><span class="badge b-warn">6</span></div>
+                <div class="attn-item"><span>Management Attention</span><span class="badge b-bad">1</span></div>
+                <div class="attn-item"><span>Unmonitored Exposure</span><span class="badge b-bad">1</span></div>
+              </div>
+              <div class="caption">Does not overwrite ORCA residual ratings.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>Top Risks Requiring Attention</h2>
+            <table>
+              <thead>
+                <tr><th>Risk</th><th>Process</th><th>Residual</th><th>Coverage</th><th>Latest KRI</th><th>Why it is here</th></tr>
+              </thead>
+              <tbody>
+                <tr class="clickable" onclick="openOrcaDrawer()">
+                  <td><strong>CYB-3-6</strong><br /><span class="muted small">Former employees retain access after offboarding</span></td>
+                  <td>User Management</td>
+                  <td><span class="badge b-bad">High</span></td>
+                  <td><span class="badge b-bad">Review Required</span></td>
+                  <td><span class="badge b-bad">Breached (3)</span></td>
+                  <td>KRI breach mapped to High residual risk</td>
+                </tr>
+                <tr>
+                  <td><strong>CYB-2-1</strong><br /><span class="muted small">Delayed detection of active threat activity</span></td>
+                  <td>Threat Response</td>
+                  <td><span class="badge b-warn">Medium</span></td>
+                  <td><span class="badge b-bad">Unmapped</span></td>
+                  <td><span class="badge b-gray">—</span></td>
+                  <td>Monitoring required, no active KRI</td>
+                </tr>
+                <tr>
+                  <td><strong>CYB-1-1</strong><br /><span class="muted small">Critical vulnerabilities not remediated in SLA</span></td>
+                  <td>VAPT</td>
+                  <td><span class="badge b-bad">High</span></td>
+                  <td><span class="badge b-warn">Watch</span></td>
+                  <td><span class="badge b-warn">Warning 91.4%</span></td>
+                  <td>Latest KRI warning · deteriorating trend</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- COVERAGE -->
+        <section id="view-coverage" class="hidden">
+          <div class="cards seven">
+            <div class="card"><div class="label">Total ORCA risks</div><div class="value">30</div></div>
+            <div class="card"><div class="label">Monitoring required</div><div class="value">18</div></div>
+            <div class="card"><div class="label">Covered</div><div class="value" style="color:var(--good)">12</div></div>
+            <div class="card"><div class="label">Partially covered</div><div class="value" style="color:var(--warn)">3</div></div>
+            <div class="card"><div class="label">Unmapped</div><div class="value" style="color:var(--bad)">2</div></div>
+            <div class="card"><div class="label">Not required</div><div class="value">12</div></div>
+            <div class="card"><div class="label">Review required</div><div class="value" style="color:var(--bad)">1</div></div>
+          </div>
+          <div class="filters">
+            <select><option>KRI Required: All</option><option>Yes</option><option>No</option><option>Not assessed</option></select>
+            <select><option>Coverage: All</option><option>Covered</option><option>Partially Covered</option><option>Unmapped</option><option>Review Required</option></select>
+            <select><option>Latest KRI: All</option><option>Good</option><option>Warning</option><option>Breached</option></select>
+            <input placeholder="Search risk no., process, threat" style="min-width:240px" />
+          </div>
+          <div class="panel">
+            <table>
+              <thead>
+                <tr>
+                  <th>Risk No.</th><th>Process</th><th>Risk</th><th>Residual</th><th>KRI Required</th>
+                  <th>Mapped KRIs</th><th>Coverage</th><th>Latest KRI</th><th>Risk Review</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="clickable" onclick="openOrcaDrawer()">
+                  <td>CYB-3-6</td><td>User Management</td>
+                  <td>Former employees retain access after offboarding</td>
+                  <td><span class="badge b-bad">High</span></td>
+                  <td>Yes</td><td>2</td>
+                  <td><span class="badge b-bad">Review Required</span></td>
+                  <td><span class="badge b-bad">Breached</span></td>
+                  <td>Open</td>
+                  <td class="row-actions"><button class="btn btn-danger" onclick="event.stopPropagation(); openReview()">Complete Review</button></td>
+                </tr>
+                <tr>
+                  <td>CYB-1-1</td><td>VAPT</td>
+                  <td>Critical vulnerabilities not remediated in SLA</td>
+                  <td><span class="badge b-bad">High</span></td>
+                  <td>Yes</td><td>1</td>
+                  <td><span class="badge b-good">Covered</span></td>
+                  <td><span class="badge b-warn">Warning</span></td>
+                  <td>—</td>
+                  <td class="row-actions"><button class="btn">Open ORCA</button></td>
+                </tr>
+                <tr>
+                  <td>CYB-2-1</td><td>Threat Response</td>
+                  <td>Delayed detection of active threat activity</td>
+                  <td><span class="badge b-warn">Medium</span></td>
+                  <td>Yes</td><td>0</td>
+                  <td><span class="badge b-bad">Unmapped</span></td>
+                  <td><span class="badge b-gray">—</span></td>
+                  <td>—</td>
+                  <td class="row-actions"><button class="btn">Map KRI</button><button class="btn btn-primary" onclick="showView('wizard')">Create KRI</button></td>
+                </tr>
+                <tr>
+                  <td>CYB-3-4</td><td>User Management</td>
+                  <td>Privileged access not reviewed on schedule</td>
+                  <td><span class="badge b-warn">Medium</span></td>
+                  <td>No</td><td>0</td>
+                  <td><span class="badge b-gray">Not Required</span></td>
+                  <td><span class="badge b-gray">—</span></td>
+                  <td>—</td>
+                  <td class="row-actions"><button class="btn">Open ORCA</button></td>
+                </tr>
+                <tr>
+                  <td>CYB-4-2</td><td>Email / Endpoint</td>
+                  <td>Malware not contained before lateral movement</td>
+                  <td><span class="badge b-warn">Medium</span></td>
+                  <td>Yes</td><td>1</td>
+                  <td><span class="badge b-warn">Partially Covered</span></td>
+                  <td><span class="badge b-gray">Overdue</span></td>
+                  <td>—</td>
+                  <td class="row-actions"><button class="btn">Review Monitoring</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ORCA -->
+        <section id="view-orca" class="hidden">
+          <div class="filters">
+            <select><option>KRI Monitoring Required: All</option></select>
+            <select><option>KRI Coverage: All</option></select>
+            <select><option>Risk Review Status: All</option></select>
+            <select><option>Latest KRI Status: All</option></select>
+            <input placeholder="Search CYB-*" />
+          </div>
+          <div class="panel">
+            <table>
+              <thead>
+                <tr>
+                  <th>Risk No.</th><th>Process</th><th>Threat</th><th>Residual</th>
+                  <th>KRI Required</th><th>KRI Coverage</th><th>Latest KRI Status</th><th>Risk Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="clickable" onclick="openOrcaDrawer()">
+                  <td>CYB-3-6</td><td>CYB-3 User Management</td>
+                  <td>Former employees retain access after offboarding</td>
+                  <td><span class="badge b-bad">High 12</span></td>
+                  <td>Yes</td>
+                  <td><span class="badge b-bad">Review Required</span></td>
+                  <td><span class="badge b-bad">Breached</span></td>
+                  <td><span class="badge b-bad">Open</span></td>
+                </tr>
+                <tr>
+                  <td>CYB-1-1</td><td>CYB-1 VAPT</td>
+                  <td>Critical vulnerabilities not remediated in SLA</td>
+                  <td><span class="badge b-bad">High 16</span></td>
+                  <td>Yes</td>
+                  <td><span class="badge b-good">Covered</span></td>
+                  <td><span class="badge b-warn">Warning</span></td>
+                  <td><span class="badge b-gray">—</span></td>
+                </tr>
+                <tr>
+                  <td>CYB-2-1</td><td>CYB-2 Threat Response</td>
+                  <td>Delayed detection of active threat activity</td>
+                  <td><span class="badge b-warn">Medium 9</span></td>
+                  <td>Yes</td>
+                  <td><span class="badge b-bad">Unmapped</span></td>
+                  <td><span class="badge b-gray">—</span></td>
+                  <td><span class="badge b-gray">—</span></td>
+                </tr>
+                <tr>
+                  <td>CYB-5-2</td><td>CYB-5 Asset Management</td>
+                  <td>Shadow IT assets not inventoried</td>
+                  <td><span class="badge b-good">Low 4</span></td>
+                  <td><span class="badge b-blue">Not Assessed</span></td>
+                  <td><span class="badge b-blue">Not Assessed</span></td>
+                  <td><span class="badge b-gray">—</span></td>
+                  <td><span class="badge b-gray">—</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- KRIs -->
+        <section id="view-kris" class="hidden">
+          <div class="grid-2">
+            <div class="panel">
+              <h2>Enter actual result — Aug 2026</h2>
+              <p class="small muted">Replace “pick Good / Warning / Breached” with a numeric result. DaxGov calculates RAG from thresholds.</p>
+              <div class="field"><span>KRI</span><strong>Offboarding Exceptions</strong></div>
+              <p class="small">Unit: Count · Direction: Lower is better · Frequency: Monthly</p>
+              <p class="small">Good = 0 · Warning = 1 · Breached ≥ 2</p>
+              <div class="field" style="margin-top:10px">
+                <span>Actual result</span>
+                <input id="actualValue" type="number" value="3" />
+              </div>
+              <div class="field" style="margin-top:8px">
+                <span>Remarks</span>
+                <textarea>Three accounts remained enabled after HR offboarding tickets closed.</textarea>
+              </div>
+              <div style="margin-top:12px; display:flex; gap:8px;">
+                <button class="btn btn-primary" onclick="evaluateKri()">Submit &amp; evaluate</button>
+                <button class="btn" onclick="document.getElementById('actualValue').value='0'">Try Good (0)</button>
+              </div>
+              <div id="kriResult" class="preview hidden">
+                Calculated status: <div id="kriStatus" class="calc">BREACHED</div>
+                <p class="small muted" id="kriFollow">Because this is Breached, DaxGov creates an open ORCA risk review for every mapped risk (CYB-3-6). Residual likelihood and impact are not changed automatically.</p>
+              </div>
+            </div>
+            <div class="panel">
+              <h2>Submission status (current period)</h2>
+              <table>
+                <thead><tr><th>KRI</th><th>Period</th><th>Actual</th><th>RAG</th><th>Submission</th></tr></thead>
+                <tbody>
+                  <tr><td>Offboarding Exceptions</td><td>Aug 2026</td><td>3</td><td><span class="badge b-bad">Breached</span></td><td><span class="badge b-bad">Review Required</span></td></tr>
+                  <tr><td>Access Removal SLA</td><td>Aug 2026</td><td>92%</td><td><span class="badge b-warn">Warning</span></td><td><span class="badge b-good">Submitted</span></td></tr>
+                  <tr><td>Critical Patching Success</td><td>Aug 2026</td><td>91.4%</td><td><span class="badge b-warn">Warning</span></td><td><span class="badge b-good">Submitted</span></td></tr>
+                  <tr><td>Phishing report rate</td><td>Aug 2026</td><td>—</td><td><span class="badge b-gray">—</span></td><td><span class="badge b-warn">Overdue</span></td></tr>
+                  <tr><td>MFA coverage</td><td>Sep 2026</td><td>—</td><td><span class="badge b-gray">—</span></td><td><span class="badge b-blue">Not Due</span></td></tr>
+                </tbody>
+              </table>
+              <p class="caption">Legacy KRIs without structured thresholds stay in MANUAL mode and still accept Good / Warning / Breached.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- WIZARD -->
+        <section id="view-wizard" class="hidden">
+          <div class="panel">
+            <h2>KRI Definition Wizard</h2>
+            <div class="wizard-steps">
+              <div class="wiz on" id="w1">1. Select ORCA risk(s)</div>
+              <div class="wiz" id="w2">2. Define KRI</div>
+              <div class="wiz" id="w3">3. Thresholds</div>
+              <div class="wiz" id="w4">4. Review</div>
+            </div>
+            <div id="wiz1">
+              <p class="small muted">Many-to-many. One KRI can watch several ORCA risks.</p>
+              <table>
+                <thead><tr><th></th><th>Risk</th><th>Process</th><th>Residual</th><th>Coverage</th></tr></thead>
+                <tbody>
+                  <tr><td><input type="checkbox" checked /></td><td>CYB-3-6 Former employees retain access</td><td>User Management</td><td>High</td><td>Review Required</td></tr>
+                  <tr><td><input type="checkbox" /></td><td>CYB-3-1 Privileged account misuse</td><td>User Management</td><td>High</td><td>Covered</td></tr>
+                  <tr><td><input type="checkbox" /></td><td>CYB-2-1 Delayed threat detection</td><td>Threat Response</td><td>Medium</td><td>Unmapped</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="wiz2" class="hidden">
+              <div class="form-grid">
+                <div class="field"><span>KRI Number</span><input value="KRI 4" /></div>
+                <div class="field"><span>Owner</span><input value="IAM Lead" /></div>
+                <div class="field full"><span>Indicator</span><input value="Number of offboarding exceptions remaining after SLA" /></div>
+                <div class="field"><span>Frequency</span><select><option>MONTHLY</option><option>QUARTERLY</option><option>EVENT_DRIVEN</option></select></div>
+                <div class="field"><span>Data source</span><input value="IAM reconciliation" /></div>
+                <div class="field"><span>Unit</span><select><option>Count</option><option>Percentage</option><option>Days</option></select></div>
+                <div class="field"><span>Direction</span><select><option>LOWER_IS_BETTER</option><option>HIGHER_IS_BETTER</option></select></div>
+              </div>
+            </div>
+            <div id="wiz3" class="hidden">
+              <p class="small">Inclusive numeric bands. Server will reject overlapping ranges.</p>
+              <div class="form-grid">
+                <div class="field"><span>Good min–max</span><input value="0 – 0" /></div>
+                <div class="field"><span>Warning min–max</span><input value="1 – 1" /></div>
+                <div class="field"><span>Breached min–max</span><input value="2 – (no max)" /></div>
+              </div>
+              <div class="preview">Example result: <strong>3</strong> → Calculated status: <span class="badge b-bad">BREACHED</span></div>
+            </div>
+            <div id="wiz4" class="hidden">
+              <p><strong>Mapped risks:</strong> CYB-3-6</p>
+              <p><strong>Indicator:</strong> Offboarding exceptions remaining after SLA</p>
+              <p><strong>Frequency / owner / source:</strong> Monthly · IAM Lead · IAM reconciliation</p>
+              <p><strong>Threshold:</strong> Good 0 · Warning 1 · Breached ≥ 2</p>
+              <p class="small muted">Save creates the KRI and mapping in one transaction. Residual ratings are untouched.</p>
+            </div>
+            <div style="margin-top:16px; display:flex; gap:8px;">
+              <button class="btn" onclick="wiz(-1)">Back</button>
+              <button class="btn btn-primary" onclick="wiz(1)" id="wizNext">Next</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="overlay" class="overlay hidden" onclick="closeAll()"></div>
+  <aside id="drawer" class="drawer hidden">
+    <div class="drawer-head">
+      <div>
+        <div class="small muted">ORCA · CYB-3-6</div>
+        <h2 style="margin:4px 0 0">Former employees retain access after offboarding</h2>
+        <p class="small muted">Residual High 12 · KRI monitoring required · Monthly · Owner: IAM Lead</p>
+      </div>
+      <button class="btn" onclick="closeAll()">Close</button>
+    </div>
+    <div class="drawer-body">
+      <div class="tabs">
+        <button>Overview</button>
+        <button>Controls</button>
+        <button>Treatment</button>
+        <button class="active">KRIs</button>
+        <button>Actions</button>
+        <button>History</button>
+      </div>
+      <div class="alert">
+        <div>
+          <strong>KRI BREACH — RISK REVIEW REQUIRED</strong>
+          <div class="small">Offboarding Exceptions · Aug 2026 · Actual 3 · Threshold Breached ≥ 2</div>
+        </div>
+        <button class="btn btn-danger" onclick="openReview()">Complete Risk Review</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>KRI</th><th>Owner</th><th>Jul</th><th>Aug</th><th>Trend</th><th>Submission</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Offboarding Exceptions</td>
+            <td>IAM Lead</td>
+            <td><span class="badge b-good">0 Good</span></td>
+            <td><span class="badge b-bad">3 Breached</span></td>
+            <td>Deteriorating</td>
+            <td><span class="badge b-bad">Review Required</span></td>
+          </tr>
+          <tr>
+            <td>Access Removal SLA</td>
+            <td>IAM Lead</td>
+            <td><span class="badge b-good">98% Good</span></td>
+            <td><span class="badge b-warn">92% Warning</span></td>
+            <td>Watch</td>
+            <td><span class="badge b-good">Submitted</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="caption">Last 6 months would appear here in the live app. Residual ratings stay High until the reviewer documents a decision.</p>
+    </div>
+  </aside>
+
+  <div id="reviewModal" class="modal hidden">
+    <div class="overlay" style="position:absolute" onclick="closeAll()"></div>
+    <div class="modal-card">
+      <h2 style="margin-top:0">ORCA Risk Review Required</h2>
+      <p class="small muted">Trigger: KRI_BREACH · Does not auto-change residual likelihood or impact.</p>
+      <table>
+        <tbody>
+          <tr><td>Risk</td><td>CYB-3-6 Former employees retain access after offboarding</td></tr>
+          <tr><td>KRI</td><td>Offboarding Exceptions</td></tr>
+          <tr><td>Period</td><td>August 2026</td></tr>
+          <tr><td>Actual result</td><td>3</td></tr>
+          <tr><td>Threshold</td><td>Good 0 · Warning 1 · Breached ≥ 2</td></tr>
+          <tr><td>Calculated status</td><td><span class="badge b-bad">BREACHED</span></td></tr>
+          <tr><td>Current residual</td><td><span class="badge b-bad">High 12</span> (Likelihood 3 × Impact 4)</td></tr>
+        </tbody>
+      </table>
+      <div class="field" style="margin-top:12px">
+        <span>Decision</span>
+        <select>
+          <option>No change to current risk assessment</option>
+          <option>Update residual likelihood</option>
+          <option>Update residual impact</option>
+          <option>Update residual risk</option>
+          <option>Create treatment action</option>
+          <option>Escalate risk</option>
+          <option>Initiate risk acceptance</option>
+        </select>
+      </div>
+      <div class="field" style="margin-top:8px">
+        <span>Rationale (required)</span>
+        <textarea>Access exceptions confirmed. Residual remains High until joiner-mover-leaver control is remediated. Action item already open.</textarea>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn" onclick="closeAll()">Cancel</button>
+        <button class="btn btn-primary" onclick="completeReview()">Complete review</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const titles = {
+      dashboard: "Management Risk Monitoring Status",
+      coverage: "KRI Coverage Workspace",
+      orca: "ORCA — with monitoring columns",
+      kris: "KRI submission — enter actual result",
+      wizard: "KRI Definition Wizard"
+    };
+    function showView(id) {
+      document.querySelectorAll("section[id^='view-']").forEach(el => el.classList.add("hidden"));
+      document.getElementById("view-" + id).classList.remove("hidden");
+      document.getElementById("pageTitle").textContent = titles[id];
+      document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.view === id));
+      closeAll();
+    }
+    document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => showView(b.dataset.view)));
+    document.getElementById("themeBtn").addEventListener("click", () => {
+      const html = document.documentElement;
+      const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      html.setAttribute("data-theme", next);
+      document.getElementById("themeBtn").textContent = next === "dark" ? "Light" : "Dark";
+    });
+    function openOrcaDrawer() {
+      document.getElementById("overlay").classList.remove("hidden");
+      document.getElementById("drawer").classList.remove("hidden");
+    }
+    function openReview() {
+      document.getElementById("reviewModal").classList.remove("hidden");
+    }
+    function closeAll() {
+      document.getElementById("overlay").classList.add("hidden");
+      document.getElementById("drawer").classList.add("hidden");
+      document.getElementById("reviewModal").classList.add("hidden");
+    }
+    function evaluateKri() {
+      const v = Number(document.getElementById("actualValue").value);
+      let status = "BREACHED", cls = "b-bad", follow = "Because this is Breached, DaxGov creates an open ORCA risk review for every mapped risk (CYB-3-6). Residual likelihood and impact are not changed automatically.";
+      if (v <= 0) { status = "GOOD"; cls = "b-good"; follow = "Good result. No ORCA risk review is created."; }
+      else if (v === 1) { status = "WARNING"; cls = "b-warn"; follow = "Warning only. No automatic ORCA risk review."; }
+      const box = document.getElementById("kriResult");
+      box.classList.remove("hidden");
+      document.getElementById("kriStatus").textContent = status;
+      document.getElementById("kriStatus").className = "calc";
+      document.getElementById("kriFollow").textContent = follow;
+      if (status === "BREACHED") openOrcaDrawer();
+    }
+    function completeReview() {
+      closeAll();
+      alert("In the live app this would close the review, write activity history, and leave residual High unless the reviewer chose to update ratings.");
+    }
+    let step = 1;
+    function wiz(delta) {
+      step = Math.min(4, Math.max(1, step + delta));
+      for (let i = 1; i <= 4; i++) {
+        document.getElementById("wiz" + i).classList.toggle("hidden", i !== step);
+        document.getElementById("w" + i).classList.toggle("on", i === step);
+      }
+      document.getElementById("wizNext").textContent = step === 4 ? "Save KRI" : "Next";
+    }
+  </script>
+</body>
+</html>

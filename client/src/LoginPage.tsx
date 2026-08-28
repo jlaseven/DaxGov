@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { useAuth } from "./auth";
 import { useTheme } from "./theme";
 
@@ -52,8 +52,11 @@ export default function LoginPage() {
       });
       await refresh();
     } catch (reason) {
-      setError("Invalid username or password.");
-      void reason;
+      setError(
+        reason instanceof ApiError && reason.status === 429
+          ? reason.message
+          : "Invalid username or password.",
+      );
     } finally {
       setBusy(false);
     }

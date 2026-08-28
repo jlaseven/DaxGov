@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, ApiError } from "./api";
+import { api, ApiError, setOnAuthRequired } from "./api";
 import type { SessionUser } from "./pages";
 
 type AuthState = {
@@ -49,6 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh();
+  }, []);
+
+  useEffect(() => {
+    setOnAuthRequired(() => setUser(null));
+    return () => setOnAuthRequired(null);
   }, []);
 
   return (

@@ -10,6 +10,7 @@ import {
   GRANTABLE_PAGES,
   LOGIN_ERROR,
   SESSION_TTL_MS,
+  SESSION_SLIDE_AFTER_MS,
   isDaxonQuestionnaireApi,
   pagesJson,
   requiredAccess,
@@ -40,6 +41,7 @@ describe("auth helpers", () => {
   });
 
   it("slides a session after the idle window so active users stay signed in", () => {
+    expect(SESSION_TTL_MS).toBe(60 * 60 * 1000);
     const now = new Date("2026-08-26T03:00:00.000Z");
     expect(
       shouldSlideSession(new Date(now.getTime() + SESSION_TTL_MS), now),
@@ -220,6 +222,9 @@ describe("auth HTTP", () => {
     expect(health.headers["x-content-type-options"]).toBe("nosniff");
     expect(health.headers["x-frame-options"]).toBe("DENY");
     expect(health.headers["cache-control"]).toMatch(/no-store/);
+    const live = await request(app).get("/health");
+    expect(live.status).toBe(200);
+    expect(live.body).toEqual({ status: "ok" });
   });
 
   it("keeps JumpCloud off and password login on until SSO is configured", async () => {
@@ -275,6 +280,37 @@ describe("auth HTTP", () => {
     expect(last?.status).toBe(429);
     expect(String(last?.body.error || "")).not.toMatch(/username/i);
     expect(last?.body.data).toBeUndefined();
+  });
+
+  it("ends the previous session when the same user signs in again", async () => {
+    const first = await login("tpsa.user", userPassword);
+    expect(first.response.status).toBe(200);
+    const second = await login("tpsa.user", userPassword);
+    expect(second.response.status).toBe(200);
+    const stale = await first.agent.get("/api/me");
+    expect(stale.status).toBe(401);
+    expect(stale.body).toEqual({ error: "Authentication required" });
+    const current = await second.agent.get("/api/me");
+    expect(current.status).toBe(200);
+    expect(current.body.data.username).toBe("tpsa.user");
+    const sessions = await prisma.session.findMany({
+      where: { userId: current.body.data.id },
+    });
+    expect(sessions).toHaveLength(1);
+  });
+
+  it("exposes session and rate-limit controls in Settings", async () => {
+    const { agent } = await login("admin", adminPassword);
+    const response = await agent.get("/api/settings/database");
+    expect(response.status).toBe(200);
+    expect(response.body.data.session).toEqual({
+      ttlMs: SESSION_TTL_MS,
+      slideAfterMs: SESSION_SLIDE_AFTER_MS,
+      concurrent: false,
+    });
+    expect(response.body.data.rateLimits.login.limit).toBe(5);
+    expect(response.body.data.rateLimits.api.limit).toBeGreaterThan(0);
+    expect(response.body.data.rateLimits.accountLock.failures).toBe(8);
   });
 
   it("blocks a User from the user-management API, including their own id", async () => {

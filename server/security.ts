@@ -122,31 +122,60 @@ export function jsonReviver(key: string, value: unknown) {
   return value;
 }
 
-export function helmetMiddleware() {
-  return helmet({
-    contentSecurityPolicy: {
-      useDefaults: false,
-      directives: {
-        defaultSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-        baseUri: ["'none'"],
-        formAction: ["'none'"],
-      },
+const helmetBase = {
+  crossOriginEmbedderPolicy: false as const,
+  crossOriginOpenerPolicy: { policy: "same-origin" as const },
+  crossOriginResourcePolicy: { policy: "same-origin" as const },
+  referrerPolicy: { policy: "no-referrer" as const },
+  frameguard: { action: "deny" as const },
+  noSniff: true,
+  hidePoweredBy: true,
+  hsts: false as const,
+  ieNoOpen: true,
+  originAgentCluster: true,
+  permittedCrossDomainPolicies: { permittedPolicies: "none" as const },
+  dnsPrefetchControl: { allow: false },
+  xXssProtection: false as const,
+};
+
+const apiHelmet = helmet({
+  ...helmetBase,
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'none'"],
+      formAction: ["'none'"],
     },
-    crossOriginEmbedderPolicy: false,
-    crossOriginOpenerPolicy: { policy: "same-origin" },
-    crossOriginResourcePolicy: { policy: "same-origin" },
-    referrerPolicy: { policy: "no-referrer" },
-    frameguard: { action: "deny" },
-    noSniff: true,
-    hidePoweredBy: true,
-    hsts: false,
-    ieNoOpen: true,
-    originAgentCluster: true,
-    permittedCrossDomainPolicies: { permittedPolicies: "none" },
-    dnsPrefetchControl: { allow: false },
-    xXssProtection: false,
-  });
+  },
+});
+
+const spaHelmet = helmet({
+  ...helmetBase,
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      fontSrc: ["'self'"],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+});
+
+export function helmetMiddleware() {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith("/api") || req.path === "/health")
+      return apiHelmet(req, res, next);
+    return spaHelmet(req, res, next);
+  };
 }
 
 export function applyTrustProxy(app: { set: (key: string, value: unknown) => void }) {
@@ -164,9 +193,16 @@ export function isHttpsRequest(req: Request) {
 export function requestOrigin(req: Request) {
   const host = String(
     req.get("x-forwarded-host") || req.get("host") || "localhost:5173",
-  ).split(",")[0];
+  )
+    .split(",")[0]
+    .trim();
   const proto = isHttpsRequest(req) ? "https" : "http";
   return `${proto}://${host}`;
+}
+
+export function isAllowedRequestOrigin(origin: string, req: Request) {
+  if (allowedOrigins().has(origin)) return true;
+  return origin === requestOrigin(req);
 }
 
 export function isJumpCloudSamlAcs(req: Request) {
@@ -186,7 +222,7 @@ export function rejectForeignOrigins() {
     if (isJumpCloudSamlAcs(req)) return next();
     const origin = req.headers.origin;
     if (!origin) return next();
-    if (allowedOrigins().has(origin)) return next();
+    if (isAllowedRequestOrigin(origin, req)) return next();
     return res.status(403).json({ error: "Forbidden" });
   };
 }

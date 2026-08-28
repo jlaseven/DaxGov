@@ -7,9 +7,8 @@ const sourcePath = path.join(root, "prisma", "schema.prisma");
 const outputDir = path.join(root, "deploy", "rds");
 const outputPath = path.join(outputDir, "schema.prisma");
 
-const header = `// Generated from prisma/schema.prisma for Amazon RDS (PostgreSQL).
-// Do not apply this until you are ready to migrate. The live app still uses SQLite.
-// Extra User fields below are for JumpCloud later; they are not in the current SQLite database.
+const header = `// Generated from prisma/schema.prisma for Aurora Serverless (PostgreSQL).
+// Local development still uses SQLite. The Docker image and AWS deploy use this schema.
 `;
 
 function withPostgresProvider(schema: string) {
@@ -41,4 +40,4 @@ await writeFile(
   `${header}${withJumpCloudUserFields(withPostgresProvider(schema))}`,
 );
 console.log(`Wrote ${path.relative(root, outputPath)}`);
-console.log("Live SQLite data was not changed. Apply this schema only when you migrate.");
+console.log("SQLite was not changed. Use this schema in the AWS container image.");

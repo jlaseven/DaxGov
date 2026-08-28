@@ -1,1 +1,11 @@
-{"extends":"./tsconfig.json","compilerOptions":{"outDir":"dist-server","noEmit":false},"include":["server/**/*.ts","prisma/**/*.ts","tests/**/*.ts","client/src/israImport.ts"]}
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "outDir": "dist-server", "noEmit": false },
+  "include": [
+    "server/**/*.ts",
+    "prisma/**/*.ts",
+    "tests/**/*.ts",
+    "client/src/israImport.ts"
+  ],
+  "exclude": ["tests/client", "tests/setup"]
+}

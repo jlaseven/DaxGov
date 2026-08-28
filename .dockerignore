@@ -1,0 +1,20 @@
+node_modules
+dist
+dist-server
+.git
+.gitignore
+*.md
+docs
+tests
+terraform
+.cursor
+prisma/*.db
+prisma/*.db-*
+prisma/backups
+prisma/migrations
+deploy/rds/export.json
+for windows
+credentials
+.env
+.env.*
+**/.DS_Store

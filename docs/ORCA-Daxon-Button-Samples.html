@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ORCA Daxon button samples (not applied yet)</title>
+  <style>
+    :root {
+      --bg: #f3f6fa;
+      --surface: #ffffff;
+      --text: #0a2347;
+      --muted: #61708a;
+      --border: #cbd5e1;
+      --accent: #0759a8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui;
+      background: var(--bg);
+      color: var(--text);
+      padding: 32px;
+    }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 720px; }
+    .note {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e3a8a;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    h2 { font-size: 15px; margin: 28px 0 12px; }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      max-width: 880px;
+    }
+    .slot {
+      position: relative;
+      padding-top: 92px;
+    }
+    .daxon {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 120px;
+      height: 120px;
+      transform: translateX(-50%);
+      object-fit: contain;
+      z-index: 2;
+      pointer-events: none;
+    }
+    .daxon.wide {
+      width: 168px;
+      height: 120px;
+      object-fit: cover;
+      object-position: center 18%;
+      border-radius: 18px;
+    }
+    .btn {
+      width: 100%;
+      min-height: 88px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 18px;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .btn.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px #0759a822;
+    }
+    .hug .daxon {
+      top: 18px;
+      width: 140px;
+      height: 110px;
+    }
+    @media (max-width: 700px) {
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Sample only — not applied to the app</h1>
+  <p>
+    Two buttons. Labels only: <strong>ORCA Dashboard</strong> and <strong>ORCA Register</strong>.
+    Daxon sits above each button and overlaps the top edge so it looks like he is hugging it.
+    Existing Daxon art is used so you can see the real mascot, not a new character.
+  </p>
+  <p class="note">Pick an option (or mix). Nothing on the ORCA page will change until you say go.</p>
+
+  <h2>Option A — portrait Daxon perched on the button</h2>
+  <div class="row">
+    <div class="slot">
+      <img class="daxon" src="../public/assets/daxon-comic.png" alt="Daxon" />
+      <button class="btn active" type="button">ORCA Dashboard</button>
+    </div>
+    <div class="slot">
+      <img class="daxon" src="../public/assets/daxon-comic.png" alt="Daxon" />
+      <button class="btn" type="button">ORCA Register</button>
+    </div>
+  </div>
+
+  <h2>Option B — same pose, fire-cat crop</h2>
+  <div class="row">
+    <div class="slot">
+      <img class="daxon" src="../public/assets/daxon-fire-cat.png" alt="Daxon" />
+      <button class="btn active" type="button">ORCA Dashboard</button>
+    </div>
+    <div class="slot">
+      <img class="daxon" src="../public/assets/daxon-fire-cat.png" alt="Daxon" />
+      <button class="btn" type="button">ORCA Register</button>
+    </div>
+  </div>
+
+  <h2>Option C — hugging pose (from the RISK book banner)</h2>
+  <div class="row hug">
+    <div class="slot">
+      <img class="daxon wide" src="../public/assets/daxon-reg-banner.png" alt="Daxon hugging" />
+      <button class="btn active" type="button">ORCA Dashboard</button>
+    </div>
+    <div class="slot">
+      <img class="daxon wide" src="../public/assets/daxon-reg-banner.png" alt="Daxon hugging" />
+      <button class="btn" type="button">ORCA Register</button>
+    </div>
+  </div>
+</body>
+</html>
