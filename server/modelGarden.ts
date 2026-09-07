@@ -38,6 +38,10 @@ type CachedToken = {
 let cachedToken: CachedToken | null = null;
 let cachedTokenPath = "";
 
+export function modelGardenCredentialsJson() {
+  return String(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || "").trim();
+}
+
 export function modelGardenCredentialsPath() {
   return (
     process.env.GOOGLE_APPLICATION_CREDENTIALS ||
@@ -480,6 +484,14 @@ export function enrichVulnerabilityLines(lines: string[], knownCves: KnownCve[])
 }
 
 function readServiceAccount(filePath: string): ServiceAccount {
+  const inline = modelGardenCredentialsJson();
+  if (inline) {
+    try {
+      return JSON.parse(inline, jsonReviver) as ServiceAccount;
+    } catch {
+      throw new Error("Google Model Garden credentials JSON is invalid.");
+    }
+  }
   try {
     return JSON.parse(readFileSync(filePath, "utf8"), jsonReviver) as ServiceAccount;
   } catch {
@@ -514,9 +526,10 @@ function signJwt(credentials: ServiceAccount) {
 
 async function accessToken() {
   const filePath = modelGardenCredentialsPath();
+  const cacheKey = modelGardenCredentialsJson() || filePath;
   if (
     cachedToken &&
-    cachedTokenPath === filePath &&
+    cachedTokenPath === cacheKey &&
     cachedToken.expiresAt > Date.now() + 60_000
   )
     return cachedToken;
@@ -550,7 +563,7 @@ async function accessToken() {
         `Google Model Garden login failed with HTTP ${response.status}.`,
     );
 
-  cachedTokenPath = filePath;
+  cachedTokenPath = cacheKey;
   cachedToken = {
     accessToken: payload.access_token,
     expiresAt: Date.now() + Number(payload.expires_in || 3600) * 1000,

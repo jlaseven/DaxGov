@@ -1,6 +1,5 @@
-// Generated from prisma/schema.prisma for Amazon RDS (PostgreSQL).
-// Do not apply this until you are ready to migrate. The live app still uses SQLite.
-// Extra User fields below are for JumpCloud later; they are not in the current SQLite database.
+// Generated from prisma/schema.prisma for Aurora Serverless (PostgreSQL).
+// Local development still uses SQLite. The Docker image and AWS deploy use this schema.
 generator client {
   provider = "prisma-client-js"
 }
@@ -453,12 +452,15 @@ model User {
 }
 
 model Session {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -533,6 +535,8 @@ model OrcaRisk {
   updatedAt                          DateTime  @updatedAt
   archivedAt                         DateTime?
   kriMappings                        KriOrcaMap[]
+  monitoringProfile                  OrcaMonitoringProfile?
+  riskReviews                        OrcaRiskReview[]
 
   @@index([processNo])
   @@index([status])
@@ -589,14 +593,100 @@ model KriRecord {
   novRemarks         String?
   decResult          String?
   decRemarks         String?
+  unit               String?
+  direction          String?
+  frequency          String?
+  dataSource         String?
+  owner              String?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   archivedAt         DateTime?
   mappings           KriOrcaMap[]
+  threshold          KriThreshold?
+  submissions        KriSubmission[]
+  riskReviews        OrcaRiskReview[]
 
   @@index([sheetId])
   @@index([riskCode])
   @@index([sortOrder])
+}
+
+model OrcaMonitoringProfile {
+  id                       Int       @id @default(autoincrement())
+  orcaRiskId               Int       @unique
+  orcaRisk                 OrcaRisk  @relation(fields: [orcaRiskId], references: [id], onDelete: Cascade)
+  kriMonitoringRequired    Boolean?
+  monitoringRationale      String?
+  monitoringFrequency      String?
+  monitoringOwner          String?
+  nextMonitoringReviewDate DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+}
+
+model KriThreshold {
+  id          Int       @id @default(autoincrement())
+  kriRecordId Int       @unique
+  kriRecord   KriRecord @relation(fields: [kriRecordId], references: [id], onDelete: Cascade)
+  mode        String
+  goodMin     Float?
+  goodMax     Float?
+  warningMin  Float?
+  warningMax  Float?
+  breachMin   Float?
+  breachMax   Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model KriSubmission {
+  id           Int       @id @default(autoincrement())
+  kriRecordId  Int
+  kriRecord    KriRecord @relation(fields: [kriRecordId], references: [id], onDelete: Cascade)
+  year         Int
+  month        Int
+  actualValue  Float?
+  status       String?
+  remarks      String?
+  evidenceLink String?
+  submittedBy  String?
+  submittedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  reviews      OrcaRiskReview[]
+
+  @@unique([kriRecordId, year, month])
+  @@index([year, month])
+}
+
+model OrcaRiskReview {
+  id              Int            @id @default(autoincrement())
+  orcaRiskId      Int
+  orcaRisk        OrcaRisk       @relation(fields: [orcaRiskId], references: [id], onDelete: Cascade)
+  kriRecordId     Int?
+  kriRecord       KriRecord?     @relation(fields: [kriRecordId], references: [id], onDelete: SetNull)
+  kriSubmissionId Int?
+  kriSubmission   KriSubmission? @relation(fields: [kriSubmissionId], references: [id], onDelete: SetNull)
+  year            Int?
+  month           Int?
+  triggerType     String
+  triggerDetails  String?
+  status          String         @default("OPEN")
+  decision        String?
+  rationale       String?
+  oldLikelihood   String?
+  oldImpact       String?
+  oldResidualScore Int?
+  newLikelihood   String?
+  newImpact       String?
+  newResidualScore Int?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([orcaRiskId, status])
+  @@index([kriRecordId])
 }
 
 model KriOrcaMap {

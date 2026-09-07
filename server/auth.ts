@@ -5,7 +5,7 @@ import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import type { LogFn } from "./activityLog.js";
 import { passwordLoginEnabled } from "./ssoConfig.js";
-import { assetResearchEnabled } from "./features.js";
+import { assetResearchEnabled, isHostedRuntime } from "./features.js";
 import {
   ACCOUNT_LOCK_AFTER,
   ACCOUNT_LOCK_MS,
@@ -22,6 +22,7 @@ export const BOOTSTRAP_ADMIN_USERNAME = "admin";
 export const BOOTSTRAP_ADMIN_PASSWORD = "ChangeMe-Admin-12";
 export const SESSION_TTL_MS = 60 * 60 * 1000;
 export const SESSION_SLIDE_AFTER_MS = 15 * 60 * 1000;
+export const SESSION_ABSOLUTE_TTL_MS = 8 * 60 * 60 * 1000;
 
 export const GRANTABLE_PAGES = [
   "dashboard",
@@ -327,14 +328,53 @@ export function shouldSlideSession(expiresAt: Date, now = new Date()) {
   );
 }
 
-function cookieOptions(req: Request) {
+export function sessionExpired(
+  session: { expiresAt: Date; createdAt: Date },
+  now = new Date(),
+) {
+  if (session.expiresAt.getTime() <= now.getTime()) return true;
+  return now.getTime() - session.createdAt.getTime() >= SESSION_ABSOLUTE_TTL_MS;
+}
+
+export function nextSessionExpiry(createdAt: Date, now = new Date()) {
+  const idleEnd = now.getTime() + SESSION_TTL_MS;
+  const absoluteEnd = createdAt.getTime() + SESSION_ABSOLUTE_TTL_MS;
+  return new Date(Math.min(idleEnd, absoluteEnd));
+}
+
+export function requestClientIp(req: Request) {
+  const ip = String(req.ip || req.socket?.remoteAddress || "")
+    .replace(/^::ffff:/, "")
+    .trim();
+  return ip.slice(0, 64) || null;
+}
+
+export function requestUserAgent(req: Request) {
+  const ua = String(req.headers["user-agent"] || "").trim();
+  return ua ? ua.slice(0, 512) : null;
+}
+
+function cookieOptions(req: Request, maxAge = SESSION_TTL_MS) {
   return {
     httpOnly: true,
     sameSite: "strict" as const,
     secure: isHttpsRequest(req),
     path: "/",
-    maxAge: SESSION_TTL_MS,
+    maxAge: Math.max(0, Math.round(maxAge)),
   };
+}
+
+function clearSessionCookie(req: Request, res: Response) {
+  res.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: isHttpsRequest(req),
+    path: "/",
+  });
+}
+
+function sessionTokenFromRequest(req: Request) {
+  return String(req.cookies?.[SESSION_COOKIE] || "");
 }
 
 export async function createSession(
@@ -344,17 +384,44 @@ export async function createSession(
   userId: number,
 ) {
   const token = crypto.randomBytes(32).toString("hex");
+  const now = new Date();
+  const absoluteCutoff = new Date(now.getTime() - SESSION_ABSOLUTE_TTL_MS);
   await prisma.$transaction([
-    prisma.session.deleteMany({ where: { userId } }),
+    prisma.session.deleteMany({
+      where: {
+        OR: [
+          { userId },
+          { expiresAt: { lte: now } },
+          { createdAt: { lte: absoluteCutoff } },
+        ],
+      },
+    }),
     prisma.session.create({
       data: {
         userId,
         tokenHash: hashToken(token),
-        expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+        expiresAt: nextSessionExpiry(now, now),
+        lastSeenAt: now,
+        ip: requestClientIp(req),
+        userAgent: requestUserAgent(req),
       },
     }),
   ]);
   res.cookie(SESSION_COOKIE, token, cookieOptions(req));
+}
+
+export async function establishAuthenticatedSession(
+  prisma: PrismaClient,
+  req: Request,
+  res: Response,
+  userId: number,
+) {
+  await destroySession(prisma, req, res);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { lastLoginAt: new Date() },
+  });
+  await createSession(prisma, req, res, userId);
 }
 
 export async function destroySession(
@@ -362,16 +429,11 @@ export async function destroySession(
   req: Request,
   res: Response,
 ) {
-  const token = String(req.cookies?.[SESSION_COOKIE] || "");
+  const token = sessionTokenFromRequest(req);
   if (token) {
     await prisma.session.deleteMany({ where: { tokenHash: hashToken(token) } });
   }
-  res.clearCookie(SESSION_COOKIE, {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: isHttpsRequest(req),
-    path: "/",
-  });
+  clearSessionCookie(req, res);
 }
 
 export async function invalidateUserSessions(
@@ -412,7 +474,7 @@ export async function ensureBootstrapAdmin(prisma: PrismaClient) {
   if (count > 0) return { created: false as const };
   const password = bootstrapAdminPassword();
   if (
-    process.env.NODE_ENV === "production" &&
+    isHostedRuntime() &&
     password === BOOTSTRAP_ADMIN_PASSWORD
   ) {
     console.warn(
@@ -479,31 +541,21 @@ export async function verifyCurrentPassword(
 export function attachSession(prisma: PrismaClient) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const token = String(req.cookies?.[SESSION_COOKIE] || "");
+      const token = sessionTokenFromRequest(req);
       if (!token) return next();
       const session = await prisma.session.findUnique({
         where: { tokenHash: hashToken(token) },
         include: { user: true },
       });
-      if (!session || session.expiresAt <= new Date()) {
+      if (!session || sessionExpired(session)) {
         if (session)
           await prisma.session.deleteMany({ where: { id: session.id } });
-        res.clearCookie(SESSION_COOKIE, {
-          path: "/",
-          httpOnly: true,
-          sameSite: "strict",
-          secure: isHttpsRequest(req),
-        });
+        clearSessionCookie(req, res);
         return next();
       }
       if (session.user.status !== "Active") {
         await prisma.session.deleteMany({ where: { userId: session.userId } });
-        res.clearCookie(SESSION_COOKIE, {
-          path: "/",
-          httpOnly: true,
-          sameSite: "strict",
-          secure: isHttpsRequest(req),
-        });
+        clearSessionCookie(req, res);
         return next();
       }
       res.locals.user = toAuthUser(session.user);
@@ -512,12 +564,18 @@ export function attachSession(prisma: PrismaClient) {
         session.user,
       );
       if (shouldSlideSession(session.expiresAt)) {
-        const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-        await prisma.session.update({
-          where: { id: session.id },
-          data: { expiresAt },
-        });
-        res.cookie(SESSION_COOKIE, token, cookieOptions(req));
+        const expiresAt = nextSessionExpiry(session.createdAt);
+        if (expiresAt.getTime() > session.expiresAt.getTime()) {
+          await prisma.session.update({
+            where: { id: session.id },
+            data: { expiresAt, lastSeenAt: new Date() },
+          });
+          res.cookie(
+            SESSION_COOKIE,
+            token,
+            cookieOptions(req, expiresAt.getTime() - Date.now()),
+          );
+        }
       }
       next();
     } catch (error) {
@@ -615,12 +673,7 @@ export function registerAuthRoutes(
         });
         return res.status(401).json({ error: LOGIN_ERROR });
       }
-      await destroySession(prisma, req, res);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-      });
-      await createSession(prisma, req, res, user.id);
+      await establishAuthenticatedSession(prisma, req, res, user.id);
       await log("auth", user.id, "auth.login.success", null, {
         username: user.username,
       }, {
@@ -698,6 +751,7 @@ export function registerAuthRoutes(
         data: { passwordHash: await hashPassword(parsed.data.password) },
       });
       bootstrapPasswordCache.clear();
+      await createSession(prisma, req, res, user.id);
       await log("auth", user.id, "auth.password_change", null, {
         username: user.username,
       }, {

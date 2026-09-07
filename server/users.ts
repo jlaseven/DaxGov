@@ -6,6 +6,7 @@ import {
   FORBIDDEN,
   GRANTABLE_PAGES,
   PAGE_GROUPS,
+  createSession,
   currentUser,
   hashPassword,
   invalidateUserSessions,
@@ -234,9 +235,12 @@ export function registerUserRoutes(
       const privilegeChanged =
         existing.role !== updated.role ||
         existing.status !== updated.status ||
-        existing.allowedPages !== updated.allowedPages ||
-        Boolean(data.password);
-      if (privilegeChanged) {
+        existing.allowedPages !== updated.allowedPages;
+      if (data.password) {
+        if (currentUser(res)?.id === id)
+          await createSession(prisma, req, res, id);
+        else await invalidateUserSessions(prisma, id);
+      } else if (privilegeChanged) {
         const keep =
           currentUser(res)?.id === id ? (res.locals.sessionId as number) : undefined;
         await invalidateUserSessions(prisma, id, keep);
@@ -322,9 +326,9 @@ export function registerUserRoutes(
         where: { id },
         data: { passwordHash: await hashPassword(password) },
       });
-      const keep =
-        currentUser(res)?.id === id ? (res.locals.sessionId as number) : undefined;
-      await invalidateUserSessions(prisma, id, keep);
+      if (currentUser(res)?.id === id)
+        await createSession(prisma, req, res, id);
+      else await invalidateUserSessions(prisma, id);
       await log("user", id, "Password Reset", { username: existing.username }, {
         username: existing.username,
       }, { targetName: existing.username, httpStatus: 200 });

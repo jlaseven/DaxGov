@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.80"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
@@ -16,6 +20,21 @@ provider "aws" {
     tags = {
       Application = var.name
       Project     = "DaxGov"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+    }
+  }
+}
+
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Application = var.name
+      Project     = "DaxGov"
+      Environment = var.environment
       ManagedBy   = "terraform"
     }
   }

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type { Express, Request, Response } from "express";
 import type { LogFn } from "./activityLog.js";
-import { createSession, destroySession, toAuthUser } from "./auth.js";
+import { establishAuthenticatedSession, toAuthUser } from "./auth.js";
 import { ssoRateLimiter } from "./rateLimits.js";
 import { isHttpsRequest, requestOrigin } from "./security.js";
 import {
@@ -327,12 +327,7 @@ export function registerJumpCloudRoutes(
         });
         return res.redirect(ssoErrorRedirect("not_provisioned"));
       }
-      await destroySession(prisma, req, res);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-      });
-      await createSession(prisma, req, res, user.id);
+      await establishAuthenticatedSession(prisma, req, res, user.id);
       await log("auth", user.id, "auth.login.sso.success", null, {
         username: user.username,
         provider: "jumpcloud",

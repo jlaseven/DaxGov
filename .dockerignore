@@ -11,7 +11,6 @@ terraform
 prisma/*.db
 prisma/*.db-*
 prisma/backups
-prisma/migrations
 deploy/rds/export.json
 for windows
 credentials

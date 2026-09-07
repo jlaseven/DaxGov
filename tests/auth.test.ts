@@ -11,10 +11,14 @@ import {
   LOGIN_ERROR,
   SESSION_TTL_MS,
   SESSION_SLIDE_AFTER_MS,
+  SESSION_ABSOLUTE_TTL_MS,
+  hashPassword,
   isDaxonQuestionnaireApi,
+  nextSessionExpiry,
   pagesJson,
   requiredAccess,
   sanitizeAllowedPages,
+  sessionExpired,
   shouldSlideSession,
   userHasPage,
   validatePassword,
@@ -42,6 +46,7 @@ describe("auth helpers", () => {
 
   it("slides a session after the idle window so active users stay signed in", () => {
     expect(SESSION_TTL_MS).toBe(60 * 60 * 1000);
+    expect(SESSION_ABSOLUTE_TTL_MS).toBe(8 * 60 * 60 * 1000);
     const now = new Date("2026-08-26T03:00:00.000Z");
     expect(
       shouldSlideSession(new Date(now.getTime() + SESSION_TTL_MS), now),
@@ -52,6 +57,33 @@ describe("auth helpers", () => {
         now,
       ),
     ).toBe(true);
+    expect(
+      sessionExpired(
+        {
+          createdAt: now,
+          expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+        },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      sessionExpired(
+        {
+          createdAt: new Date(now.getTime() - SESSION_ABSOLUTE_TTL_MS - 1),
+          expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+        },
+        now,
+      ),
+    ).toBe(true);
+    expect(nextSessionExpiry(now, now).getTime()).toBe(
+      now.getTime() + SESSION_TTL_MS,
+    );
+    expect(
+      nextSessionExpiry(
+        new Date(now.getTime() - SESSION_ABSOLUTE_TTL_MS + 10 * 60 * 1000),
+        now,
+      ).getTime(),
+    ).toBe(now.getTime() + 10 * 60 * 1000);
   });
 
   it("maps API routes to session, page, or admin access", () => {
@@ -181,7 +213,6 @@ describe("auth HTTP", () => {
     app = mod.default;
     prisma = mod.prisma;
     request = ((await import("supertest")) as any).default;
-    const { hashPassword } = await import("../server/auth");
     await prisma.user.create({
       data: {
         username: "admin",
@@ -299,6 +330,96 @@ describe("auth HTTP", () => {
     expect(sessions).toHaveLength(1);
   });
 
+  it("issues an HttpOnly session cookie with login metadata", async () => {
+    const agent = request.agent(app);
+    const response = await agent
+      .post("/api/login")
+      .set("X-Requested-With", "DaxGov")
+      .set("User-Agent", "DaxGov-Session-Test/1.0")
+      .send({ username: "tpsa.user", password: userPassword });
+    expect(response.status).toBe(200);
+    const setCookie = String(response.headers["set-cookie"] || "");
+    expect(setCookie).toMatch(/cybergov_session=/);
+    expect(setCookie).toMatch(/HttpOnly/i);
+    expect(setCookie).toMatch(/SameSite=Strict/i);
+    const user = await prisma.user.findUnique({
+      where: { username: "tpsa.user" },
+    });
+    const sessions = await prisma.session.findMany({
+      where: { userId: user.id },
+    });
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].userAgent).toBe("DaxGov-Session-Test/1.0");
+    expect(sessions[0].lastSeenAt).toBeTruthy();
+    expect(sessions[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("destroys the server session on logout", async () => {
+    const { agent, response } = await login("tpsa.user", userPassword);
+    expect(response.status).toBe(200);
+    const user = await prisma.user.findUnique({
+      where: { username: "tpsa.user" },
+    });
+    const signedOut = await agent
+      .post("/api/logout")
+      .set("X-Requested-With", "DaxGov");
+    expect(signedOut.status).toBe(204);
+    expect(
+      await prisma.session.count({ where: { userId: user.id } }),
+    ).toBe(0);
+    const me = await agent.get("/api/me");
+    expect(me.status).toBe(401);
+  });
+
+  it("rotates the session after a password change", async () => {
+    const password = "RotatePass-12x";
+    const nextPassword = "RotatePass-13x";
+    await prisma.user.create({
+      data: {
+        username: "rotate.user",
+        displayName: "Rotate User",
+        passwordHash: await hashPassword(password),
+        role: "User",
+        status: "Active",
+        allowedPages: pagesJson(["dashboard"]),
+      },
+    });
+    const { agent, response } = await login("rotate.user", password);
+    expect(response.status).toBe(200);
+    const user = await prisma.user.findUnique({
+      where: { username: "rotate.user" },
+    });
+    const before = await prisma.session.findMany({ where: { userId: user.id } });
+    expect(before).toHaveLength(1);
+    const changed = await agent
+      .post("/api/me/password")
+      .set("X-Requested-With", "DaxGov")
+      .send({ currentPassword: password, password: nextPassword });
+    expect(changed.status).toBe(200);
+    const after = await prisma.session.findMany({ where: { userId: user.id } });
+    expect(after).toHaveLength(1);
+    expect(after[0].tokenHash).not.toBe(before[0].tokenHash);
+    const me = await agent.get("/api/me");
+    expect(me.status).toBe(200);
+  });
+
+  it("rejects a session that has passed the absolute timeout", async () => {
+    const { agent, response } = await login("tpsa.user", userPassword);
+    expect(response.status).toBe(200);
+    const user = await prisma.user.findUnique({
+      where: { username: "tpsa.user" },
+    });
+    await prisma.session.updateMany({
+      where: { userId: user.id },
+      data: {
+        createdAt: new Date(Date.now() - SESSION_ABSOLUTE_TTL_MS - 1000),
+      },
+    });
+    const me = await agent.get("/api/me");
+    expect(me.status).toBe(401);
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+  });
+
   it("exposes session and rate-limit controls in Settings", async () => {
     const { agent } = await login("admin", adminPassword);
     const response = await agent.get("/api/settings/database");
@@ -306,6 +427,7 @@ describe("auth HTTP", () => {
     expect(response.body.data.session).toEqual({
       ttlMs: SESSION_TTL_MS,
       slideAfterMs: SESSION_SLIDE_AFTER_MS,
+      absoluteTtlMs: SESSION_ABSOLUTE_TTL_MS,
       concurrent: false,
     });
     expect(response.body.data.rateLimits.login.limit).toBe(5);

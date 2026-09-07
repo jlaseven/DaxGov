@@ -3,7 +3,10 @@ import { SAML, ValidateInResponseTo } from "@node-saml/node-saml";
 import type { Express, Request, Response } from "express";
 import express from "express";
 import type { LogFn } from "./activityLog.js";
-import { createSession, destroySession, type AuthUser } from "./auth.js";
+import {
+  establishAuthenticatedSession,
+  type AuthUser,
+} from "./auth.js";
 import { ssoRateLimiter } from "./rateLimits.js";
 import { requestOrigin } from "./security.js";
 import {
@@ -156,12 +159,7 @@ export function registerJumpCloudSamlRoutes(
           );
           return res.redirect(ssoErrorRedirect("not_provisioned"));
         }
-        await destroySession(prisma, req, res);
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        });
-        await createSession(prisma, req, res, user.id);
+        await establishAuthenticatedSession(prisma, req, res, user.id);
         await log(
           "auth",
           user.id,

@@ -4,6 +4,7 @@
   "include": [
     "server/**/*.ts",
     "prisma/**/*.ts",
+    "scripts/**/*.ts",
     "tests/**/*.ts",
     "client/src/israImport.ts"
   ],

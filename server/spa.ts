@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Express, NextFunction, Request, Response } from "express";
 import express from "express";
+import { isHostedRuntime } from "./features.js";
 
 export function spaDistDir(cwd = process.cwd()) {
   const fromEnv = String(process.env.SPA_DIST || "").trim();
@@ -18,7 +19,7 @@ export function shouldServeSpa(cwd = process.cwd()) {
   if (process.env.NODE_ENV === "test" && flag !== "1" && flag !== "true")
     return false;
   if (flag === "1" || flag === "true") return existsSync(spaIndexPath(cwd));
-  if (process.env.NODE_ENV === "production") return existsSync(spaIndexPath(cwd));
+  if (isHostedRuntime()) return existsSync(spaIndexPath(cwd));
   return false;
 }
 

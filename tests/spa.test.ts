@@ -36,6 +36,22 @@ describe("SPA serving", () => {
     expect(shouldServeSpa()).toBe(false);
   });
 
+  it("serves the SPA in sandbox when the built index exists", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "daxgov-spa-sandbox-"));
+    try {
+      await writeFile(
+        path.join(dir, "index.html"),
+        "<!doctype html><title>DaxGov SPA</title>",
+      );
+      process.env.NODE_ENV = "sandbox";
+      delete process.env.SERVE_SPA;
+      process.env.SPA_DIST = dir;
+      expect(shouldServeSpa()).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("falls back to index.html for client routes and leaves /api and /health alone", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "daxgov-spa-"));
     try {

@@ -9,11 +9,20 @@ export default defineConfig({
       {
         plugins: [react()],
         test: {
+          name: "unit",
+          environment: "node",
+          include: ["tests/unit/**/*.test.ts"],
+        },
+      },
+      {
+        plugins: [react()],
+        test: {
           name: "api",
           environment: "node",
           include: ["tests/**/*.test.ts"],
           exclude: [
             "tests/client/**",
+            "tests/unit/**",
             "node_modules/**",
             "dist/**",
             "dist-server/**",

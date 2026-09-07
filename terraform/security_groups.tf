@@ -1,22 +1,25 @@
 resource "aws_security_group" "alb" {
   name        = "${var.name}-alb"
-  description = "Public load balancer for the DaxGov SPA"
+  description = "Internet-facing load balancer; CloudFront is the intended client and must send X-Origin-Verify"
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
+    description = "Listener from the internet; ALB still requires the CloudFront origin-verify header"
+    from_port   = local.alb_https_enabled ? 443 : 80
+    to_port     = local.alb_https_enabled ? 443 : 80
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ingress_cidrs
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_ingress_cidrs
+  dynamic "ingress" {
+    for_each = var.allowed_ingress_cidrs
+    content {
+      description = "Optional extra listener access"
+      from_port   = local.alb_https_enabled ? 443 : 80
+      to_port     = local.alb_https_enabled ? 443 : 80
+      protocol    = "tcp"
+      cidr_blocks = [ingress.value]
+    }
   }
 
   egress {
@@ -37,7 +40,7 @@ resource "aws_security_group" "app" {
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description     = "From load balancer"
+    description     = "HTTPS from load balancer"
     from_port       = var.container_port
     to_port         = var.container_port
     protocol        = "tcp"

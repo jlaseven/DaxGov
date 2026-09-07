@@ -15,17 +15,16 @@ resource "aws_rds_cluster" "aurora" {
   database_name      = var.database_name
   master_username    = var.database_username
 
-  manage_master_user_password = true
+  manage_master_user_password   = true
+  master_user_secret_kms_key_id = aws_kms_key.this.arn
 
   db_subnet_group_name      = aws_db_subnet_group.aurora.name
   vpc_security_group_ids    = [aws_security_group.aurora.id]
   storage_encrypted         = true
-  copy_tags_to_snapshot     = true
-  backup_retention_period   = var.backup_retention_days
-  preferred_backup_window   = "16:00-17:00"
+  kms_key_id                = aws_kms_key.this.arn
+  backup_retention_period   = 1
+  skip_final_snapshot       = true
   deletion_protection       = var.deletion_protection
-  skip_final_snapshot       = !var.deletion_protection
-  final_snapshot_identifier = var.deletion_protection ? null : "${var.name}-aurora-final"
   enable_http_endpoint      = false
 
   serverlessv2_scaling_configuration {

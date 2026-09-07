@@ -1,12 +1,28 @@
 aws_region            = "ap-southeast-1"
 name                  = "daxgov"
-vpc_cidr              = "10.80.0.0/16"
+environment           = "sandbox"
+vpc_cidr              = "10.82.0.0/16"
 database_name         = "daxgov"
 database_username     = "daxgov"
-aurora_engine_version = "16.6"
+aurora_engine_version = "16.8"
 aurora_min_acu        = 0.5
 aurora_max_acu        = 4
 desired_count         = 1
 image_tag             = "latest"
+# Leave domain_name empty to use the CloudFront default hostname (no Route 53 / ACM).
+domain_name           = ""
+# domain_name         = "daxgov.example.com"
+# route53_zone_id     = "ZXXXXXXXXXXXX"
 # certificate_arn     = "arn:aws:acm:ap-southeast-1:123456789012:certificate/..."
-# allowed_ingress_cidrs = ["x.x.x.x/32"]
+# cloudfront_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
+# allowed_ingress_cidrs = ["10.80.0.0/16"]
+
+# Secrets Manager / Parameter Store (leave secrets empty to generate or disable)
+# jumpcloud_client_id       = ""
+# jumpcloud_client_secret   = ""
+# jumpcloud_issuer          = "https://oauth.id.jumpcloud.com/"
+# jumpcloud_saml_entrypoint = ""
+# jumpcloud_saml_idp_cert   = ""
+# bootstrap_admin_password  = ""
+# google_application_credentials_json = ""
+# google_cloud_project      = ""

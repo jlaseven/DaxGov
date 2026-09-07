@@ -65,14 +65,15 @@ Passwords, hashes, and session tokens are never written. Existing SQLite activit
 - `npm run test:api` — server unit and HTTP tests only
 - `npm run typecheck`
 - `npm run build`
-- `npm run db:prepare-rds` — write a PostgreSQL Prisma schema under `deploy/rds/` without touching `governance.db`
+- `npm run db:prepare-rds` — write a PostgreSQL Prisma schema and migrations under `deploy/rds/` without touching `governance.db`
+- `npm run db:deploy:rds` — apply those PostgreSQL migrations (`prisma migrate deploy`) when `DATABASE_URL` points at Aurora
 - `npm run db:export-sqlite` — copy current SQLite rows to `deploy/rds/export.json` when you are ready to migrate
 
-## AWS: dedicated VPC, Aurora Serverless, Secrets Manager
+## AWS: dedicated VPC, HTTPS CDN, Aurora Serverless
 
-Terraform in `terraform/` creates a VPC used only by DaxGov, Aurora PostgreSQL Serverless v2, an Application Load Balancer, ECS Fargate, and an RDS-managed Secrets Manager secret for the database password. The container loads that secret at startup and never takes a password as a plaintext environment variable.
+Terraform in `terraform/` creates a VPC used only by DaxGov. CloudFront is the public HTTPS entry point. It reaches the dedicated VPC ALB (HTTPS when an ACM certificate is available, otherwise HTTP to the ALB with an origin-verify header). ECS Fargate runs in the public subnets and uses the VPC Internet Gateway for AWS APIs and outbound HTTPS, so this stack does not create a NAT gateway (NAT cannot be shared from another VPC). The ALB reaches those tasks over HTTPS. Aurora PostgreSQL Serverless v2 stays in private data subnets with no internet route. The database password is an RDS-managed Secrets Manager secret. Application secrets and Parameter Store config are created by Terraform and injected into ECS; the container never takes a password as a plaintext Terraform environment value.
 
-1. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and set the region, CIDR, and optional ACM certificate ARN.
+1. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars`. Leave `domain_name` empty to publish on the CloudFront default `*.cloudfront.net` hostname (HTTP from CloudFront to the internal ALB, HTTPS at the edge). For a custom hostname, set `domain_name` and either `route53_zone_id` or `certificate_arn` (regional, for the ALB) plus optionally `cloudfront_certificate_arn` (`us-east-1`). Use a VPC CIDR that does not overlap other VPCs in the account (do not reuse `segs-prod` `10.80.0.0/16`).
 2. Create the registry first, then push the image, then apply the rest:
 
 ```bash
@@ -85,21 +86,21 @@ cd terraform
 terraform apply
 ```
 
-3. Open the `app_url` output. The first Administrator is still `admin` / `ChangeMe-Admin-12` until you change it.
+3. Open the `app_url` output (or `cloudfront_domain_name` if DNS is not in Route 53). Read the first Administrator password from Secrets Manager (`terraform output -raw app_secret_arn`, key `BOOTSTRAP_ADMIN_PASSWORD`). Watch CloudFront, ALB, ECS, and Aurora on the `daxgov` CloudWatch dashboard.
 
-The ECS task receives `DATABASE_SECRET_ARN`. On boot it calls Secrets Manager, builds `DATABASE_URL` with `sslmode=require`, runs `prisma db push`, then serves the SPA from `/` and the API from `/api`. Health checks use `GET /health`.
+The ECS task receives only secret and parameter pointers (`DATABASE_SECRET_ARN`, `APP_SECRET_ARN`, `APP_CONFIG_PARAMETER`, `AWS_REGION`). Non-secret settings live in Parameter Store under `/daxgov/<environment>/config`, including `NODE_ENV` set to the Terraform `environment` value (`sandbox` by default). Credentials (JumpCloud, bootstrap admin password, Model Garden JSON, origin-verify) live in Secrets Manager, encrypted with the DaxGov CMK. ECS injects those values at start. The container then builds `DATABASE_URL` from the RDS-managed secret, runs `prisma migrate deploy` against the PostgreSQL schema in `deploy/rds/`, then serves the SPA from `/` and the API from `/api` over TLS. Health checks use `GET /health`. If Aurora already has tables from an earlier `db push`, the task baselines those migrations after catching up any missing columns.
 
-Aurora is in private data subnets and accepts TCP 5432 only from the app security group. File backup/restore in Settings stays SQLite-only; use Aurora snapshots in AWS after you migrate.
+The first Administrator password is in Secrets Manager (`/{name}/{environment}/app`, key `BOOTSTRAP_ADMIN_PASSWORD`). Retrieve it after apply; do not leave `ChangeMe-Admin-12` in production.
+
+Aurora is in private data subnets and accepts TCP 5432 only from the app security group. The ALB is internal and accepts 443 only from CloudFront. File backup/restore in Settings stays SQLite-only; use Aurora snapshots in AWS after you migrate.
 
 To copy local SQLite rows into Aurora, run `npm run db:export-sqlite` before cutover and load `deploy/rds/export.json` with a one-off import against the cluster. Keep a copy of `prisma/governance.db`.
-
-Optional: set `certificate_arn` to an ACM certificate in the same region so the load balancer serves HTTPS and redirects HTTP.
 
 ## JumpCloud SSO
 
 Local username/password stays on until JumpCloud SSO is configured. Create the DaxGov user first. JumpCloud sign-in matches `preferred_username`, SAML `username`/`NameID`, or the email local-part to `User.username`. Unmatched accounts are not created automatically.
 
-The login page shows **Sign in with JumpCloud** when either OIDC or SAML is configured. `/api/auth/jumpcloud` picks the protocol automatically. If both are set, OIDC is used unless `JUMPCLOUD_SSO_PROTOCOL=saml`.
+The login page shows **Sign in with JumpCloud** when either OIDC or SAML is configured. `/api/auth/jumpcloud` picks the protocol automatically. If both are set, OIDC is used unless `JUMPCLOUD_SSO_PROTOCOL=saml`. On AWS, set the JumpCloud Terraform variables so client IDs and URLs go to Parameter Store and secrets/certificates go to Secrets Manager.
 
 ### OpenID Connect
 

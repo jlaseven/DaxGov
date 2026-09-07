@@ -10,6 +10,7 @@ import {
   registerAuthRoutes,
   requireAuthAndPage,
   requirePasswordChange,
+  SESSION_ABSOLUTE_TTL_MS,
   SESSION_SLIDE_AFTER_MS,
   SESSION_TTL_MS,
   verifyCurrentPassword,
@@ -81,6 +82,7 @@ import {
   rejectForeignOrigins,
   requireRequestedWith,
 } from "./security.js";
+import { requestLog, writeAppLog } from "./appLog.js";
 import { computeOrcaScores, orcaSchema } from "./orca.js";
 import { registerKriRoutes } from "./kris.js";
 import { registerRiskMonitoringRoutes } from "./riskMonitoringRoutes.js";
@@ -97,6 +99,7 @@ app.use(cookieParser());
 app.use(rejectForeignOrigins());
 app.use(requireRequestedWith());
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.use(requestLog());
 app.use("/api", noStoreApi());
 app.use(
   "/api/settings/restore-upload",
@@ -1814,6 +1817,7 @@ app.get("/api/settings/database", async (_req, res, next) => {
         session: {
           ttlMs: SESSION_TTL_MS,
           slideAfterMs: SESSION_SLIDE_AFTER_MS,
+          absoluteTtlMs: SESSION_ABSOLUTE_TTL_MS,
           concurrent: false,
         },
       },
@@ -1909,7 +1913,9 @@ app.use((err: any, _req: any, res: any, _next: any) => {
       .json({ error: "A record with that identifier already exists" });
   const known = clientErrorMessage(err);
   if (known) return res.status(400).json({ error: known });
-  console.error(err?.message);
+  writeAppLog("error", "unhandled_error", {
+    message: err?.message || "Internal server error",
+  });
   res.status(500).json({ error: "Internal server error" });
 });
 export default app;

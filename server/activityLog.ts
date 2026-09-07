@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { ActivityLog, PrismaClient } from "@prisma/client";
 import type { NextFunction, Request, Response } from "express";
+import { writeAppLog } from "./appLog.js";
 
 export const ACTIVITY_APPLICATION = "cybergov";
 
@@ -344,6 +345,15 @@ export function createLogger(prisma: PrismaClient): LogFn {
         httpPath: context.httpPath || null,
         httpStatus: extras?.httpStatus ?? null,
       },
+    });
+    writeAppLog(outcome === "failure" || outcome === "denied" ? "warn" : "info", "activity", {
+      entity_type: entityType,
+      entity_id: String(id),
+      action: actionName,
+      outcome,
+      actor: extras?.actorUsername || context.actorUsername || null,
+      method: context.httpMethod || null,
+      path: context.httpPath || null,
     });
   };
 }

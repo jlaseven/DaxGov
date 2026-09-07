@@ -8,7 +8,8 @@ resource "aws_ecr_repository" "app" {
   }
 
   encryption_configuration {
-    encryption_type = "AES256"
+    encryption_type = "KMS"
+    kms_key         = aws_kms_key.this.arn
   }
 }
 
@@ -35,5 +36,16 @@ resource "aws_ecr_lifecycle_policy" "app" {
 
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.name}"
-  retention_in_days = 30
+  retention_in_days = 90
+  kms_key_id        = aws_kms_key.this.arn
+
+  depends_on = [aws_kms_alias.this]
+}
+
+resource "aws_cloudwatch_log_group" "container_insights" {
+  name              = "/aws/ecs/containerinsights/${var.name}/performance"
+  retention_in_days = 90
+  kms_key_id        = aws_kms_key.this.arn
+
+  depends_on = [aws_kms_alias.this]
 }

@@ -69,7 +69,7 @@ vi.mock("../../client/src/api", () => ({
           label: "Aurora Serverless (PostgreSQL)",
           host: "daxgov.cluster.rds.amazonaws.com",
           database: "daxgov",
-          session: { ttlMs: 1000, slideAfterMs: 500, concurrent: false },
+          session: { ttlMs: 1000, slideAfterMs: 500, absoluteTtlMs: 8000, concurrent: false },
           rateLimits: {
             login: { limit: 5, windowMs: 1000 },
             accountLock: { failures: 8, lockMs: 1000 },

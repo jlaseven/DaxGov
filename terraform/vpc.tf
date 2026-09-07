@@ -17,9 +17,6 @@ locals {
     cidrsubnet(var.vpc_cidr, 8, 20),
     cidrsubnet(var.vpc_cidr, 8, 21),
   ]
-
-  https_enabled = var.certificate_arn != ""
-  app_url       = local.https_enabled ? "https://${aws_lb.app.dns_name}" : "http://${aws_lb.app.dns_name}"
 }
 
 resource "aws_vpc" "this" {
@@ -77,25 +74,6 @@ resource "aws_subnet" "data" {
   }
 }
 
-resource "aws_eip" "nat" {
-  domain = "vpc"
-
-  tags = {
-    Name = "${var.name}-nat"
-  }
-
-  depends_on = [aws_internet_gateway.this]
-}
-
-resource "aws_nat_gateway" "this" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-
-  tags = {
-    Name = "${var.name}-nat"
-  }
-}
-
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
 
@@ -117,11 +95,6 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.this.id
-  }
 
   tags = {
     Name = "${var.name}-private"

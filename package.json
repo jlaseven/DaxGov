@@ -9,14 +9,16 @@
     "build": "prisma generate && tsc -p tsconfig.server.json && vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "test": "vitest run",
-    "test:api": "vitest run tests --exclude tests/client",
-    "test:client": "vitest run tests/client",
+    "test:unit": "vitest run --project unit",
+    "test:api": "vitest run --project api",
+    "test:client": "vitest run --project client",
     "lint": "eslint .",
     "typecheck": "prisma generate && tsc -p tsconfig.server.json --noEmit && tsc -p client/tsconfig.json --noEmit",
     "db:migrate": "prisma migrate dev --name init",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",
     "db:prepare-rds": "tsx scripts/prepare-rds-schema.ts",
+    "db:deploy:rds": "prisma migrate deploy --schema deploy/rds/schema.prisma",
     "db:export-sqlite": "tsx scripts/export-sqlite-json.ts"
   },
   "prisma": {

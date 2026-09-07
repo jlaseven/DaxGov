@@ -1,11 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { writePostgresMigrations } from "./postgresMigrations.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = path.join(root, "prisma", "schema.prisma");
 const outputDir = path.join(root, "deploy", "rds");
 const outputPath = path.join(outputDir, "schema.prisma");
+const sqliteMigrationsDir = path.join(root, "prisma", "migrations");
+const postgresMigrationsDir = path.join(outputDir, "migrations");
 
 const header = `// Generated from prisma/schema.prisma for Aurora Serverless (PostgreSQL).
 // Local development still uses SQLite. The Docker image and AWS deploy use this schema.
@@ -39,5 +42,13 @@ await writeFile(
   outputPath,
   `${header}${withJumpCloudUserFields(withPostgresProvider(schema))}`,
 );
+const { names } = await writePostgresMigrations({
+  sqliteMigrationsDir,
+  sqliteSchema: schema,
+  outputDir: postgresMigrationsDir,
+});
 console.log(`Wrote ${path.relative(root, outputPath)}`);
-console.log("SQLite was not changed. Use this schema in the AWS container image.");
+console.log(
+  `Wrote ${names.length} PostgreSQL migrations under ${path.relative(root, postgresMigrationsDir)}`,
+);
+console.log("SQLite was not changed. ECS will run prisma migrate deploy against Aurora.");

@@ -2255,10 +2255,13 @@ function SettingsPage() {
         <section className="panel">
           <h2>Sessions</h2>
           <p>
-            A signed-in session lasts {formatWindow(info.session.ttlMs)}. While
-            you keep using DaxGov, it can renew after{" "}
+            A signed-in session lasts {formatWindow(info.session.ttlMs)} of
+            inactivity and at most{" "}
+            {formatWindow(info.session.absoluteTtlMs)}. While you keep using
+            DaxGov, it can renew after{" "}
             {formatWindow(info.session.slideAfterMs)}. Signing in again ends
-            any earlier session for the same account.
+            any earlier session for the same account. Changing your password
+            issues a new session and signs out other devices.
           </p>
         </section>
       )}
