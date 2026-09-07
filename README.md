@@ -67,7 +67,7 @@ Passwords, hashes, and session tokens are never written. Existing SQLite activit
 - `npm run build`
 - `npm run db:prepare-rds` — write a PostgreSQL Prisma schema and migrations under `deploy/rds/` without touching `governance.db`
 - `npm run db:deploy:rds` — apply those PostgreSQL migrations (`prisma migrate deploy`) when `DATABASE_URL` points at Aurora
-- `npm run db:export-sqlite` — copy current SQLite rows to `deploy/rds/export.json` when you are ready to migrate
+- `npm run db:export-sqlite` — copy current SQLite register rows to `server/sqlitePreload.json` (users, sessions, and activity logs are omitted)
 
 ## AWS: dedicated VPC, HTTPS CDN, Aurora Serverless
 
@@ -94,7 +94,7 @@ The first Administrator password is in Secrets Manager (`/{name}/{environment}/a
 
 Aurora is in private data subnets and accepts TCP 5432 only from the app security group. The ALB is internal and accepts 443 only from CloudFront. File backup/restore in Settings stays SQLite-only; use Aurora snapshots in AWS after you migrate.
 
-To copy local SQLite rows into Aurora, run `npm run db:export-sqlite` before cutover and load `deploy/rds/export.json` with a one-off import against the cluster. Keep a copy of `prisma/governance.db`.
+The Docker image does not copy `prisma/governance.db`. Schema migrations create empty Aurora tables; ORCA and KRI still seed from JSON. Other registers (documents, TPSA, ISRA, assets, and so on) load from `server/sqlitePreload.json` on first boot when those tables are empty. Refresh that snapshot with `npm run db:export-sqlite` before building the image. Keep a copy of `prisma/governance.db`. Users already in Aurora are left unchanged.
 
 ## JumpCloud SSO
 
