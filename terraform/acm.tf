@@ -19,9 +19,13 @@ locals {
     ? "https://${var.domain_name}"
     : "https://${aws_cloudfront_distribution.app.domain_name}"
   )
-  allowed_origin_values = distinct(compact([
-    for origin in split(",", var.allowed_origins) : trimspace(origin)
-  ]))
+  # CloudFront uses AllViewerExceptHostHeader, so the app sees the ALB Host, not
+  # the CloudFront domain. Browser POSTs still send Origin as the CDN URL, which
+  # must be allowlisted or login returns 403 Forbidden.
+  allowed_origin_values = distinct(compact(concat(
+    [local.app_url],
+    [for origin in split(",", var.allowed_origins) : trimspace(origin)],
+  )))
 }
 
 resource "aws_acm_certificate" "alb" {

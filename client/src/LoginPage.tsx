@@ -53,7 +53,7 @@ export default function LoginPage() {
       await refresh();
     } catch (reason) {
       setError(
-        reason instanceof ApiError && reason.status === 429
+        reason instanceof ApiError && (reason.status === 429 || reason.status === 403)
           ? reason.message
           : "Invalid username or password.",
       );

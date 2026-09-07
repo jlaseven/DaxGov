@@ -47,6 +47,28 @@ describe("request hardening helpers", () => {
     expect(isAllowedRequestOrigin("https://evil.example", req)).toBe(false);
   });
 
+  it("allows CloudFront when Host is the ALB and ALLOWED_ORIGINS lists the CDN URL", () => {
+    const previous = process.env.ALLOWED_ORIGINS;
+    process.env.ALLOWED_ORIGINS = "https://d3qo2um036t78.cloudfront.net";
+    try {
+      const req = {
+        secure: true,
+        headers: { "x-forwarded-proto": "https" },
+        get(name: string) {
+          if (name === "host") return "daxgov-alb.ap-southeast-1.elb.amazonaws.com";
+          return undefined;
+        },
+      } as any;
+      expect(
+        isAllowedRequestOrigin("https://d3qo2um036t78.cloudfront.net", req),
+      ).toBe(true);
+      expect(isAllowedRequestOrigin("https://evil.example", req)).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.ALLOWED_ORIGINS;
+      else process.env.ALLOWED_ORIGINS = previous;
+    }
+  });
+
   it("drops prototype-polluting JSON keys", () => {
     const parsed = JSON.parse(
       '{"assetName":"ok","__proto__":{"admin":true},"constructor":{"prototype":{"x":1}}}',
